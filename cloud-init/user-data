@@ -68,7 +68,7 @@ write_files:
         netcat-traditional python3-impacket impacket-scripts \
         binwalk foremost sleuthkit \
         metasploit-framework \
-        docker.io docker-compose-v2"
+        docker.io docker-compose-plugin docker-compose"
       for p in $PKGS; do apt-get install -y --no-install-recommends "$p" || echo "SKIP $p"; done
       # Metasploit DB init at build time so first launch is fast
       ( systemctl enable --now postgresql 2>/dev/null; msfdb init 2>/dev/null ) || true
