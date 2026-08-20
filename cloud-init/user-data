@@ -1,0 +1,124 @@
+#cloud-config
+# Sentinel OS — self-provisioning security workstation.
+# Boots an Ubuntu cloud image into an XFCE desktop that auto-launches the
+# Sentinel app, with the Nexus CLI on PATH. Everything installs on first boot.
+hostname: sentinel-os
+users:
+  - name: sentinel
+    gecos: Sentinel Operator
+    groups: [sudo, kvm]
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    shell: /bin/bash
+    lock_passwd: false
+    # password: "sentinel" (change after first login)
+    passwd: "$6$rounds=4096$sentinelos$3Qд"          # replaced at build time
+chpasswd:
+  expire: false
+ssh_pwauth: true
+
+package_update: true
+package_upgrade: false
+packages:
+  - xfce4
+  - xfce4-terminal
+  - lightdm
+  - firefox
+  - git
+  - curl
+  - wget
+  - ca-certificates
+  - build-essential
+  - python3
+  - python3-pip
+  - nodejs
+  - npm
+  - nmap
+  - net-tools
+  - dnsutils
+  - whois
+  - jq
+  - docker.io
+  - docker-compose-v2
+
+write_files:
+  # LightDM autologin so the desktop comes straight up.
+  - path: /etc/lightdm/lightdm.conf.d/10-sentinel-autologin.conf
+    content: |
+      [Seat:*]
+      autologin-user=sentinel
+      autologin-user-timeout=0
+      user-session=xfce
+  # Autostart the Sentinel desktop app on login.
+  - path: /home/sentinel/.config/autostart/sentinel-app.desktop
+    content: |
+      [Desktop Entry]
+      Type=Application
+      Name=Sentinel
+      Exec=sentinel-app
+      X-GNOME-Autostart-enabled=true
+    owner: sentinel:sentinel
+    defer: true
+  # Autostart a terminal running the Nexus CLI.
+  - path: /home/sentinel/.config/autostart/nexus.desktop
+    content: |
+      [Desktop Entry]
+      Type=Application
+      Name=Nexus
+      Exec=xfce4-terminal --title=Nexus -e "bash -lc 'sentinel nexus || bash'"
+      X-GNOME-Autostart-enabled=true
+    owner: sentinel:sentinel
+    defer: true
+  # First-run provisioner: installs the Sentinel app + Nexus CLI from our repos.
+  - path: /usr/local/sbin/sentinel-provision.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -eux
+      LOG=/var/log/sentinel-provision.log; exec >>"$LOG" 2>&1
+      echo "=== Sentinel provision $(date) ==="
+      # 1) Sentinel desktop app — latest .deb from the rolling 'sentinel' release
+      DEB_URL=$(curl -fsSL https://api.github.com/repos/SpartanKing18/sentinel-web/releases/tags/sentinel \
+        | jq -r '.assets[].browser_download_url' | grep -E 'sentinel-app_.*_amd64\.deb' | sort -V | tail -1)
+      if [ -n "$DEB_URL" ]; then
+        curl -fL "$DEB_URL" -o /tmp/sentinel-app.deb
+        apt-get install -y /tmp/sentinel-app.deb || { dpkg -i /tmp/sentinel-app.deb || true; apt-get -f install -y; }
+      fi
+      # 2) Nexus CLI (sentinel-cli) — global install so `sentinel` is on PATH
+      if [ ! -d /opt/sentinel-cli ]; then
+        git clone --depth 1 https://github.com/SpartanKing18/sentinel-cli /opt/sentinel-cli
+      fi
+      ( cd /opt/sentinel-cli && npm install --omit=dev --no-audit --no-fund || npm install --no-audit --no-fund; npm link || ln -sf /opt/sentinel-cli/sentinel.js /usr/local/bin/sentinel )
+      chmod +x /opt/sentinel-cli/sentinel.js || true
+      # 3) Desktop shortcuts
+      install -d -o sentinel -g sentinel /home/sentinel/Desktop
+      cat > /home/sentinel/Desktop/Sentinel.desktop <<'D'
+      [Desktop Entry]
+      Type=Application
+      Name=Sentinel
+      Exec=sentinel-app
+      Terminal=false
+      D
+      chown sentinel:sentinel /home/sentinel/Desktop/Sentinel.desktop
+      chmod +x /home/sentinel/Desktop/Sentinel.desktop
+      # 4) Practice lab (Docker) — let `sentinel lab` bring up vulnerable targets
+      systemctl enable --now docker || true
+      usermod -aG docker sentinel || true
+      cat > /home/sentinel/Desktop/Practice-Lab.desktop <<'D'
+      [Desktop Entry]
+      Type=Application
+      Name=Practice Lab
+      Exec=xfce4-terminal --title="Practice Lab" -e "bash -lc 'echo Bring up vulnerable practice targets with:; echo \"  sentinel lab up\"; echo; sentinel lab doctor 2>/dev/null; exec bash'"
+      Terminal=false
+      D
+      chown sentinel:sentinel /home/sentinel/Desktop/Practice-Lab.desktop
+      chmod +x /home/sentinel/Desktop/Practice-Lab.desktop
+      touch /var/lib/sentinel-provisioned
+      echo "=== provision done ==="
+
+runcmd:
+  - [ systemctl, enable, lightdm ]
+  - [ bash, /usr/local/sbin/sentinel-provision.sh ]
+  - [ systemctl, set-default, graphical.target ]
+  - [ systemctl, start, lightdm ]
+
+final_message: "Sentinel OS is ready after $UPTIME seconds. Log in as 'sentinel'."

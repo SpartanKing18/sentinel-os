@@ -1,0 +1,6 @@
+# Build artifacts (multi-GB images) — never commit these
+*.img
+*.qcow2
+*.vdi
+*.iso
+.seed/
