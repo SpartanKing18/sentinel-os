@@ -71,12 +71,13 @@ write_files:
         subfinder httpx-toolkit naabu katana dnsx feroxbuster amass masscan \
         gitleaks trufflehog wafw00f netexec evil-winrm enum4linux-ng \
         docker.io docker-compose-plugin docker-compose"
-      for p in $PKGS; do apt-get install -y --no-install-recommends "$p" || echo "SKIP $p"; done
+      for p in $PKGS; do apt-get install -y "$p" || echo "SKIP $p"; done
       # Metasploit DB init at build time so first launch is fast
       ( systemctl enable --now postgresql 2>/dev/null; msfdb init 2>/dev/null ) || true
       # Docker practice lab
       systemctl enable --now docker 2>/dev/null || true
       usermod -aG docker sentinel || true
+      usermod -aG wireshark sentinel 2>/dev/null || true
       # Local AI for autonomous hacking (free + offline). Model pulled on first
       # Autopilot use so first boot stays bounded.
       curl -fsSL https://ollama.com/install.sh | sh || true
@@ -129,7 +130,8 @@ write_files:
       # works offline. Only use against systems you own or are authorized to test.
       set -u
       if command -v ollama >/dev/null; then
-        pgrep -x ollama >/dev/null || (nohup ollama serve >/dev/null 2>&1 &) ; sleep 1
+        pgrep -x ollama >/dev/null || (nohup ollama serve >/dev/null 2>&1 &)
+        for _i in $(seq 1 20); do ollama list >/dev/null 2>&1 && break; sleep 1; done
         if ! ollama list 2>/dev/null | grep -qiE "llama3|qwen|mistral"; then
           echo "[*] First run: pulling a local model (~2 GB, one-time)…"
           ollama pull llama3.2:3b || true

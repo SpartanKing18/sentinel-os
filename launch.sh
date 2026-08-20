@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Launch Sentinel OS in QEMU. Uses KVM if available (fast), else TCG (slow).
-# The seed.iso is attached only until the VM has provisioned itself once.
+# The seed.iso stays attached; cloud-init runs it once (instance-id is pinned),
+# so re-launches don't re-provision.
 set -euo pipefail
 cd "$(dirname "$0")"
 
