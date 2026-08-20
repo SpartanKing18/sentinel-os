@@ -4,3 +4,7 @@
 *.vdi
 *.iso
 .seed/
+*.tar.xz
+*.raw
+disk.raw
+base-*.qcow2

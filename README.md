@@ -1,9 +1,21 @@
 # Sentinel OS
 
-A self-provisioning Linux VM that bundles everything in the Sentinel toolkit:
-the **Sentinel desktop app** (GUI: recon, scanner, threat intel, Gmail/GitHub,
-the autonomous Assistant) and the **Nexus CLI** (`sentinel` / `sentinel nexus`),
-on an Ubuntu 24.04 + XFCE desktop with common security tooling pre-installed.
+A self-provisioning **Kali Linux** VM that bundles everything in the Sentinel
+toolkit: the **Sentinel desktop app** (GUI: recon, scanner, threat intel,
+Gmail/GitHub, the autonomous Assistant) and the **Nexus CLI**
+(`sentinel` / `sentinel nexus`), layered on the Kali generic cloud image — so you
+get Kali's menu, themes, undercover mode, injection-patched kernel, and a curated
+pentest toolset, plus our tools on top.
+
+## What's inside
+- **Base:** Kali Linux (generic cloud image) + XFCE (`kali-desktop-xfce`, `kali-menu`, `kali-undercover`)
+- **Sentinel app** (latest `.deb`) — auto-launches on login
+- **Nexus CLI** (`sentinel` / `sentinel nexus`)
+- **Curated tools** across Kali's categories: nmap, theHarvester, dnsrecon, nikto,
+  whatweb, wpscan, nuclei, ffuf, gobuster, sqlmap, john, hashcat, hydra, seclists,
+  aircrack-ng, radare2, exploitdb/searchsploit, wireshark, tcpdump, ettercap,
+  responder, impacket, binwalk, foremost, sleuthkit, **metasploit-framework**
+- **Docker practice lab** (`sentinel lab up`)
 
 ## Build & run
 
