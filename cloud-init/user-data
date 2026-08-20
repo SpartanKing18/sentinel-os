@@ -68,6 +68,8 @@ write_files:
         netcat-traditional python3-impacket impacket-scripts \
         binwalk foremost sleuthkit \
         metasploit-framework \
+        subfinder httpx-toolkit naabu katana dnsx feroxbuster amass masscan \
+        gitleaks trufflehog wafw00f netexec evil-winrm enum4linux-ng \
         docker.io docker-compose-plugin docker-compose"
       for p in $PKGS; do apt-get install -y --no-install-recommends "$p" || echo "SKIP $p"; done
       # Metasploit DB init at build time so first launch is fast
@@ -75,6 +77,10 @@ write_files:
       # Docker practice lab
       systemctl enable --now docker 2>/dev/null || true
       usermod -aG docker sentinel || true
+      # Local AI for autonomous hacking (free + offline). Model pulled on first
+      # Autopilot use so first boot stays bounded.
+      curl -fsSL https://ollama.com/install.sh | sh || true
+      systemctl enable --now ollama 2>/dev/null || true
       # Sentinel app — latest .deb from the rolling 'sentinel' release
       DEB_URL=$(curl -fsSL https://api.github.com/repos/SpartanKing18/sentinel-web/releases/tags/sentinel \
         | jq -r '.assets[].browser_download_url' | grep -E 'sentinel-app_.*_amd64\.deb' | sort -V | tail -1)
@@ -102,10 +108,48 @@ write_files:
       Exec=xfce4-terminal --title="Practice Lab" -e "bash -lc 'echo Bring up vulnerable targets with:; echo \"  sentinel lab up\"; sentinel lab doctor 2>/dev/null; exec bash'"
       Terminal=false
       D
+      cat > /home/sentinel/Desktop/Autopilot.desktop <<'D'
+      [Desktop Entry]
+      Type=Application
+      Name=Sentinel Autopilot
+      Comment=Autonomous AI hacking — give a goal, the local agent runs recon + exploitation
+      Exec=xfce4-terminal --title="Sentinel Autopilot" -e sentinel-autopilot
+      Terminal=false
+      D
       chown sentinel:sentinel /home/sentinel/Desktop/*.desktop 2>/dev/null || true
       chmod +x /home/sentinel/Desktop/*.desktop 2>/dev/null || true
       touch /var/lib/sentinel-provisioned
       echo "=== provision done $(date) ==="
+  - path: /usr/local/bin/sentinel-autopilot
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # Autonomous hacking: a local AI agent plans and runs recon + exploitation
+      # toward a goal you give it, using a free local model (Ollama) — no API key,
+      # works offline. Only use against systems you own or are authorized to test.
+      set -u
+      if command -v ollama >/dev/null; then
+        pgrep -x ollama >/dev/null || (nohup ollama serve >/dev/null 2>&1 &) ; sleep 1
+        if ! ollama list 2>/dev/null | grep -qiE "llama3|qwen|mistral"; then
+          echo "[*] First run: pulling a local model (~2 GB, one-time)…"
+          ollama pull llama3.2:3b || true
+        fi
+      fi
+      echo "== Sentinel Autopilot — autonomous AI hacking =="
+      read -rp "Goal (e.g. 'recon and exploit 10.0.0.5 for a shell'): " GOAL
+      [ -n "$GOAL" ] || { echo "no goal given"; exit 1; }
+      exec sentinel nexus run "$GOAL" -e ollama
+  - path: /usr/local/bin/sentinel-arsenal
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # Install the FULL heavy toolset on demand (BlackArch-style breadth):
+      # the kali-linux-large metapackage (~19 GB). Big + slow — opt-in only.
+      set -e
+      read -rp "Install kali-linux-large (~19 GB)? [y/N] " a; [ "$a" = y ] || exit 0
+      sudo apt-get update
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y kali-linux-large
+      echo "Done — re-log to see the new menu entries."
 
 runcmd:
   - [ bash, -c, "echo 'datasource_list: [ NoCloud, ConfigDrive, None ]' > /etc/cloud/cloud.cfg.d/99-nocloud.cfg" ]
