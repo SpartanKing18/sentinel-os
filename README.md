@@ -1,20 +1,22 @@
 # Sentinel OS
 
-A self-provisioning **Kali Linux** VM that bundles everything in the Sentinel
+A unique, self-provisioning security workstation built **from scratch on a neutral Debian base** (not Kali) that bundles everything in the Sentinel
 toolkit: the **Sentinel desktop app** (GUI: recon, scanner, threat intel,
 Gmail/GitHub, the autonomous Assistant) and the **Nexus CLI**
-(`sentinel` / `sentinel nexus`), layered on the Kali generic cloud image — so you
-get Kali's menu, themes, undercover mode, injection-patched kernel, and a curated
-pentest toolset, plus our tools on top.
+(`sentinel` / `sentinel nexus`), with its own desktop, its own curated toolset (Debian + upstream — no Kali
+packages), a local-AI autonomous layer, and the Sentinel app as the UI cockpit.
 
 ## What's inside
-- **Base:** Kali Linux (generic cloud image) + XFCE (`kali-desktop-xfce`, `kali-menu`, `kali-undercover`)
+- **Base:** Debian 12 (generic cloud) + our own XFCE desktop
 - **Sentinel app** (latest `.deb`) — auto-launches on login
 - **Nexus CLI** (`sentinel` / `sentinel nexus`)
-- **Curated tools** across Kali's categories: nmap, theHarvester, dnsrecon, nikto,
-  whatweb, wpscan, nuclei, ffuf, gobuster, sqlmap, john, hashcat, hydra, seclists,
-  aircrack-ng, radare2, exploitdb/searchsploit, wireshark, tcpdump, ettercap,
-  responder, impacket, binwalk, foremost, sleuthkit, **metasploit-framework**
+- **Our own curated toolset** (Debian repos + upstream, no Kali packages): nmap,
+  masscan, nikto, whatweb, wafw00f, dnsrecon, dirb, wfuzz, gobuster, sqlmap, hydra,
+  john, hashcat, aircrack-ng, wireshark, ettercap, radare2, binwalk, sleuthkit,
+  impacket, seclists, searchsploit, **metasploit**, and upstream **nuclei /
+  subfinder / httpx / ffuf / netexec**
+- **Autonomous AI (Ollama)** — the desktop **Autopilot** and `sentinel nexus run`
+  do recon + exploitation toward a goal, offline
 - **Docker practice lab** (`sentinel lab up`)
 
 ## Build & run

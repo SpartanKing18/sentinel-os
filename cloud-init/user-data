@@ -1,8 +1,7 @@
 #cloud-config
-# Sentinel OS — self-provisioning Kali workstation.
-# Boots the Kali generic cloud image into an XFCE desktop (Kali menu + theme +
-# undercover), auto-launches the Sentinel app, Nexus CLI on PATH, curated
-# pentest toolset. Everything installs on first boot.
+# Sentinel OS — a unique, from-scratch security workstation on a neutral Debian
+# base. Its own desktop + curated toolset + local-AI autonomy + the Sentinel app
+# as the UI cockpit. No Kali packages. Everything installs on first boot.
 hostname: sentinel-os
 users:
   - name: sentinel
@@ -24,6 +23,16 @@ write_files:
       autologin-user=sentinel
       autologin-user-timeout=0
       user-session=xfce
+  - path: /etc/motd
+    content: |
+
+      ███████ ███████ ███    ██ ████████ ██ ███    ██ ███████ ██
+      ██      ██      ████   ██    ██    ██ ████   ██ ██      ██
+      ███████ █████   ██ ██  ██    ██    ██ ██ ██  ██ █████   ██
+           ██ ██      ██  ██ ██    ██    ██ ██  ██ ██ ██      ██
+      ███████ ███████ ██   ████    ██    ██ ██   ████ ███████ ███████
+        Sentinel OS · agentic security workstation · `sentinel nexus` / Autopilot
+
   - path: /home/sentinel/.config/autostart/sentinel-app.desktop
     content: |
       [Desktop Entry]
@@ -33,15 +42,23 @@ write_files:
       X-GNOME-Autostart-enabled=true
     owner: sentinel:sentinel
     defer: true
-  - path: /home/sentinel/.config/autostart/nexus.desktop
+  - path: /usr/local/bin/sentinel-autopilot
+    permissions: "0755"
     content: |
-      [Desktop Entry]
-      Type=Application
-      Name=Nexus
-      Exec=xfce4-terminal --title=Nexus -e "bash -lc 'sentinel nexus || bash'"
-      X-GNOME-Autostart-enabled=true
-    owner: sentinel:sentinel
-    defer: true
+      #!/usr/bin/env bash
+      # Autonomous hacking: a local AI agent plans + runs recon/exploitation toward
+      # a goal, using a free local model (Ollama) — offline, no API key. Authorized
+      # targets only.
+      set -u
+      if command -v ollama >/dev/null; then
+        pgrep -x ollama >/dev/null || (nohup ollama serve >/dev/null 2>&1 &)
+        for _i in $(seq 1 20); do ollama list >/dev/null 2>&1 && break; sleep 1; done
+        ollama list 2>/dev/null | grep -qiE "llama3|qwen|mistral" || { echo "[*] pulling a local model (one-time)…"; ollama pull llama3.2:3b || true; }
+      fi
+      echo "== Sentinel Autopilot — autonomous AI hacking =="
+      read -rp "Goal (e.g. 'recon and exploit 10.0.0.5 for a shell'): " GOAL
+      [ -n "$GOAL" ] || { echo "no goal given"; exit 1; }
+      exec sentinel nexus run "$GOAL" -e ollama
   - path: /usr/local/sbin/sentinel-provision.sh
     permissions: "0755"
     content: |
@@ -50,70 +67,63 @@ write_files:
       export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
       LOG=/var/log/sentinel-provision.log; exec >>"$LOG" 2>&1
       echo "=== Sentinel provision $(date) ==="
-      apt-get update -y || true
       apt-get remove -y needrestart 2>/dev/null || true
-      # wireshark setuid: answer the debconf prompt up front (headless-safe)
+      # Enable contrib/non-free for broader tool coverage
+      sed -i 's/ main$/ main contrib non-free non-free-firmware/' /etc/apt/sources.list 2>/dev/null || true
+      apt-get update -y || true
       echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
-      # Desktop (Kali XFCE + menu taxonomy + theme + undercover) and curated tools.
-      # Installed one-by-one so a single unavailable package can't abort the batch.
-      PKGS="kali-desktop-xfce lightdm kali-menu kali-themes kali-undercover firefox-esr \
-        git curl wget jq nodejs npm python3 python3-pip build-essential \
-        nmap theharvester dnsrecon dnsutils whois net-tools \
-        nikto whatweb wpscan nuclei \
-        ffuf gobuster sqlmap \
-        john hashcat hydra seclists wordlists \
-        aircrack-ng \
-        radare2 exploitdb \
-        wireshark tcpdump ettercap-graphical responder \
-        netcat-traditional python3-impacket impacket-scripts \
-        binwalk foremost sleuthkit \
-        metasploit-framework \
-        subfinder httpx-toolkit naabu katana dnsx feroxbuster amass masscan \
-        gitleaks trufflehog wafw00f netexec evil-winrm enum4linux-ng \
-        docker.io docker-compose-plugin docker-compose"
+      # Our own desktop (XFCE) + tools from Debian — installed one-by-one so a
+      # single unavailable package can't abort the batch.
+      PKGS="xfce4 xfce4-terminal xfce4-goodies lightdm dbus-x11 firefox-esr \
+        git curl wget jq unzip build-essential python3 python3-pip pipx golang-go nodejs npm \
+        nmap masscan dnsutils whois net-tools tcpdump \
+        nikto whatweb wafw00f dnsrecon dirb wfuzz gobuster \
+        sqlmap hydra john hashcat \
+        aircrack-ng wireshark ettercap-graphical \
+        radare2 binwalk foremost sleuthkit \
+        netcat-traditional python3-impacket \
+        docker.io docker-compose-plugin"
       for p in $PKGS; do apt-get install -y "$p" || echo "SKIP $p"; done
-      # Metasploit DB init at build time so first launch is fast
-      ( systemctl enable --now postgresql 2>/dev/null; msfdb init 2>/dev/null ) || true
-      # Docker practice lab
-      systemctl enable --now docker 2>/dev/null || true
-      usermod -aG docker sentinel || true
+      usermod -aG docker sentinel 2>/dev/null || true
       usermod -aG wireshark sentinel 2>/dev/null || true
-      # Local AI for autonomous hacking (free + offline). Model pulled on first
-      # Autopilot use so first boot stays bounded.
+      systemctl enable --now docker 2>/dev/null || true
+      # ---- upstream tools (not in Debian) ----
+      # Metasploit (official installer adds its apt repo)
+      ( curl -fsSL https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfinstall -o /tmp/msfinstall && chmod +x /tmp/msfinstall && /tmp/msfinstall ) || true
+      # SecLists + Exploit-DB (searchsploit)
+      [ -d /usr/share/seclists ] || git clone --depth 1 https://github.com/danielmiessler/SecLists /usr/share/seclists || true
+      [ -d /opt/exploitdb ] || git clone --depth 1 https://gitlab.com/exploit-database/exploitdb /opt/exploitdb || true
+      ln -sf /opt/exploitdb/searchsploit /usr/local/bin/searchsploit 2>/dev/null || true
+      # ProjectDiscovery essentials + others via go install
+      export GOBIN=/usr/local/bin GOPATH=/root/go
+      for g in "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" \
+               "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest" \
+               "github.com/projectdiscovery/httpx/cmd/httpx@latest" \
+               "github.com/ffuf/ffuf/v2@latest"; do go install "$g" || echo "GOSKIP $g"; done
+      pipx install netexec 2>/dev/null || true; pipx ensurepath 2>/dev/null || true
+      # Local AI for autonomous hacking
       curl -fsSL https://ollama.com/install.sh | sh || true
       systemctl enable --now ollama 2>/dev/null || true
-      # Sentinel app — latest .deb from the rolling 'sentinel' release
-      DEB_URL=$(curl -fsSL https://api.github.com/repos/SpartanKing18/sentinel-web/releases/tags/sentinel \
-        | jq -r '.assets[].browser_download_url' | grep -E 'sentinel-app_.*_amd64\.deb' | sort -V | tail -1)
-      if [ -n "$DEB_URL" ]; then
-        curl -fL "$DEB_URL" -o /tmp/sentinel-app.deb
-        apt-get install -y /tmp/sentinel-app.deb || { dpkg -i /tmp/sentinel-app.deb || true; apt-get -f install -y; }
-      fi
-      # Nexus CLI
+      # Sentinel app (latest .deb) + Nexus CLI
+      DEB_URL=$(curl -fsSL https://api.github.com/repos/SpartanKing18/sentinel-web/releases/tags/sentinel | jq -r '.assets[].browser_download_url' | grep -E 'sentinel-app_.*_amd64\.deb' | sort -V | tail -1)
+      if [ -n "$DEB_URL" ]; then curl -fL "$DEB_URL" -o /tmp/sentinel-app.deb; apt-get install -y /tmp/sentinel-app.deb || { dpkg -i /tmp/sentinel-app.deb || true; apt-get -f install -y; }; fi
       [ -d /opt/sentinel-cli ] || git clone --depth 1 https://github.com/SpartanKing18/sentinel-cli /opt/sentinel-cli
       ( cd /opt/sentinel-cli && { npm install --omit=dev --no-audit --no-fund || npm install --no-audit --no-fund; }; npm link || ln -sf /opt/sentinel-cli/sentinel.js /usr/local/bin/sentinel )
       chmod +x /opt/sentinel-cli/sentinel.js || true
-      # Desktop shortcuts
+      # Desktop cockpit shortcuts
       install -d -o sentinel -g sentinel /home/sentinel/Desktop
       cat > /home/sentinel/Desktop/Sentinel.desktop <<'D'
       [Desktop Entry]
       Type=Application
-      Name=Sentinel
+      Name=Sentinel (cockpit)
       Exec=sentinel-app
-      Terminal=false
-      D
-      cat > /home/sentinel/Desktop/Practice-Lab.desktop <<'D'
-      [Desktop Entry]
-      Type=Application
-      Name=Practice Lab
-      Exec=xfce4-terminal --title="Practice Lab" -e "bash -lc 'echo Bring up vulnerable targets with:; echo \"  sentinel lab up\"; sentinel lab doctor 2>/dev/null; exec bash'"
       Terminal=false
       D
       cat > /home/sentinel/Desktop/Autopilot.desktop <<'D'
       [Desktop Entry]
       Type=Application
       Name=Sentinel Autopilot
-      Comment=Autonomous AI hacking — give a goal, the local agent runs recon + exploitation
+      Comment=Autonomous AI hacking — give a goal, the local agent runs it
       Exec=xfce4-terminal --title="Sentinel Autopilot" -e sentinel-autopilot
       Terminal=false
       D
@@ -121,37 +131,6 @@ write_files:
       chmod +x /home/sentinel/Desktop/*.desktop 2>/dev/null || true
       touch /var/lib/sentinel-provisioned
       echo "=== provision done $(date) ==="
-  - path: /usr/local/bin/sentinel-autopilot
-    permissions: "0755"
-    content: |
-      #!/usr/bin/env bash
-      # Autonomous hacking: a local AI agent plans and runs recon + exploitation
-      # toward a goal you give it, using a free local model (Ollama) — no API key,
-      # works offline. Only use against systems you own or are authorized to test.
-      set -u
-      if command -v ollama >/dev/null; then
-        pgrep -x ollama >/dev/null || (nohup ollama serve >/dev/null 2>&1 &)
-        for _i in $(seq 1 20); do ollama list >/dev/null 2>&1 && break; sleep 1; done
-        if ! ollama list 2>/dev/null | grep -qiE "llama3|qwen|mistral"; then
-          echo "[*] First run: pulling a local model (~2 GB, one-time)…"
-          ollama pull llama3.2:3b || true
-        fi
-      fi
-      echo "== Sentinel Autopilot — autonomous AI hacking =="
-      read -rp "Goal (e.g. 'recon and exploit 10.0.0.5 for a shell'): " GOAL
-      [ -n "$GOAL" ] || { echo "no goal given"; exit 1; }
-      exec sentinel nexus run "$GOAL" -e ollama
-  - path: /usr/local/bin/sentinel-arsenal
-    permissions: "0755"
-    content: |
-      #!/usr/bin/env bash
-      # Install the FULL heavy toolset on demand (BlackArch-style breadth):
-      # the kali-linux-large metapackage (~19 GB). Big + slow — opt-in only.
-      set -e
-      read -rp "Install kali-linux-large (~19 GB)? [y/N] " a; [ "$a" = y ] || exit 0
-      sudo apt-get update
-      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y kali-linux-large
-      echo "Done — re-log to see the new menu entries."
 
 runcmd:
   - [ bash, -c, "echo 'datasource_list: [ NoCloud, ConfigDrive, None ]' > /etc/cloud/cloud.cfg.d/99-nocloud.cfg" ]
@@ -160,4 +139,4 @@ runcmd:
   - [ systemctl, set-default, graphical.target ]
   - [ systemctl, start, lightdm ]
 
-final_message: "Sentinel OS (Kali) ready after $UPTIME s. Login: sentinel / sentinel."
+final_message: "Sentinel OS ready after $UPTIME s. Login: sentinel / sentinel."
