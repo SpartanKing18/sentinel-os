@@ -92,20 +92,20 @@ write_files:
       systemctl enable --now docker 2>/dev/null || true
       # ---- upstream tools (not in Debian) ----
       # Metasploit (official installer adds its apt repo)
-      ( curl -fsSL https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfinstall -o /tmp/msfinstall && chmod +x /tmp/msfinstall && /tmp/msfinstall ) || true
+      ( curl -fsSL --max-time 60 https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfinstall -o /tmp/msfinstall && chmod +x /tmp/msfinstall && timeout 900 /tmp/msfinstall ) || echo "MSF-SKIP"
       # SecLists + Exploit-DB (searchsploit)
       [ -d /usr/share/seclists ] || git clone --depth 1 https://github.com/danielmiessler/SecLists /usr/share/seclists || true
       [ -d /opt/exploitdb ] || git clone --depth 1 https://gitlab.com/exploit-database/exploitdb /opt/exploitdb || true
       ln -sf /opt/exploitdb/searchsploit /usr/local/bin/searchsploit 2>/dev/null || true
       # ProjectDiscovery essentials + others via go install
       export GOBIN=/usr/local/bin GOPATH=/root/go
-      for g in "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" \
+      export GOFLAGS=-mod=mod; for g in "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" \
                "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest" \
                "github.com/projectdiscovery/httpx/cmd/httpx@latest" \
-               "github.com/ffuf/ffuf/v2@latest"; do go install "$g" || echo "GOSKIP $g"; done
+               "github.com/ffuf/ffuf/v2@latest"; do timeout 360 go install "$g" || echo "GOSKIP $g"; done
       pipx install netexec 2>/dev/null || true; pipx ensurepath 2>/dev/null || true
       # Local AI for autonomous hacking
-      curl -fsSL https://ollama.com/install.sh | sh || true
+      timeout 300 bash -c "curl -fsSL https://ollama.com/install.sh | sh" || echo OLLAMA-SKIP
       systemctl enable --now ollama 2>/dev/null || true
       # Sentinel app (latest .deb) + Nexus CLI
       DEB_URL=$(curl -fsSL https://api.github.com/repos/SpartanKing18/sentinel-web/releases/tags/sentinel | jq -r '.assets[].browser_download_url' | grep -E 'sentinel-app_.*_amd64\.deb' | sort -V | tail -1)
