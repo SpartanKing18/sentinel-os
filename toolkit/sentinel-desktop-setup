@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# First-login desktop branding for Sentinel OS — wallpaper + dark theme. Self-removes.
+set -u
+WALL=/usr/share/backgrounds/sentinel-wallpaper.png
+for i in $(seq 1 20); do xfconf-query -c xfce4-desktop -l >/dev/null 2>&1 && break; sleep 1; done
+# dark theme (Arc-Dark if present, else Adwaita-dark) + Papirus icons
+xfconf-query -c xsettings -p /Net/ThemeName -s "Arc-Dark" 2>/dev/null || xfconf-query -c xsettings -p /Net/ThemeName -s "Adwaita-dark" 2>/dev/null
+xfconf-query -c xfwm4 -p /general/theme -s "Arc-Dark" 2>/dev/null || xfconf-query -c xfwm4 -p /general/theme -s "Adwaita-dark" 2>/dev/null
+xfconf-query -c xsettings -p /Net/IconThemeName -s "Papirus-Dark" 2>/dev/null || true
+# wallpaper on all existing backdrop props + monitor0/Virtual-1 fallbacks
+if [ -f "$WALL" ]; then
+  while read -r p; do [ -n "$p" ] && xfconf-query -c xfce4-desktop -p "$p" -s "$WALL" 2>/dev/null; done < <(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E 'last-image$')
+  for m in monitor0 monitorVirtual-1 monitorVirtual1; do
+    xfconf-query -c xfce4-desktop -p "/backdrop/screen0/$m/workspace0/last-image" -n -t string -s "$WALL" 2>/dev/null
+    xfconf-query -c xfce4-desktop -p "/backdrop/screen0/$m/workspace0/image-style" -n -t int -s 5 2>/dev/null
+  done
+  xfdesktop --reload 2>/dev/null
+fi
+rm -f "$HOME/.config/autostart/sentinel-desktop-setup.desktop"

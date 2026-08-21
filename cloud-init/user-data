@@ -44,12 +44,15 @@ write_files:
       ███████ ███████ ██   ████    ██    ██ ██   ████ ███████ ███████
         Sentinel OS · agentic security workstation · `sentinel nexus` / Autopilot
 
-  - path: /home/sentinel/.config/autostart/sentinel-app.desktop
+  # The Sentinel app is optional (in the menu / on the desktop) — it does NOT
+  # auto-launch. The VM's UI is its own branded XFCE desktop. This autostart only
+  # applies the Sentinel wallpaper + dark theme once, then removes itself.
+  - path: /home/sentinel/.config/autostart/sentinel-desktop-setup.desktop
     content: |
       [Desktop Entry]
       Type=Application
-      Name=Sentinel
-      Exec=env SENTINEL_NO_BOOT=1 sentinel-app
+      Name=Sentinel Desktop Setup
+      Exec=sentinel-desktop-setup
       X-GNOME-Autostart-enabled=true
     owner: sentinel:sentinel
     defer: true
@@ -100,7 +103,7 @@ write_files:
         netcat-traditional python3-impacket \
         tor nftables firejail firejail-profiles apparmor apparmor-utils macchanger \
         proxychains4 torsocks keepassxc gnupg whiptail desktop-file-utils \
-        xdotool wmctrl libimage-exiftool-perl \
+        xdotool wmctrl libimage-exiftool-perl arc-theme papirus-icon-theme \
         docker.io docker-compose-plugin"
       for p in $PKGS; do apt-get install -y "$p" || echo "SKIP $p"; done
       usermod -aG docker sentinel 2>/dev/null || true
@@ -140,11 +143,13 @@ write_files:
       # Sentinel toolkit — adopted-and-improved distro features + unique AI tools
       for s in sentinel-anon sentinel-macspoof sentinel-detonate sentinel-stealth \
                sentinel-ask sentinel-triage sentinel-engage sentinel-arsenal \
-               sentinel-tweaks gen-sentinel-menu; do
+               sentinel-tweaks gen-sentinel-menu sentinel-desktop-setup; do
         curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/$s" -o "/usr/local/bin/$s" && chmod +x "/usr/local/bin/$s" || echo "TOOLKIT-SKIP $s"
       done
       command -v firecfg >/dev/null && firecfg >/dev/null 2>&1 || true   # auto-sandbox common apps
       gen-sentinel-menu 2>/dev/null || true
+      install -d /usr/share/backgrounds; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-wallpaper.png" -o /usr/share/backgrounds/sentinel-wallpaper.png 2>/dev/null || true
+      curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-wallpaper.png" -o /usr/share/backgrounds/sentinel-wallpaper.png 2>/dev/null || true
       # Make the image bootable on ANY hypervisor disk controller (VirtualBox
       # SATA/AHCI, VMware) — the Debian cloud initramfs is virtio-only by default.
       sed -i 's/^MODULES=.*/MODULES=most/' /etc/initramfs-tools/initramfs.conf 2>/dev/null || echo "MODULES=most" >> /etc/initramfs-tools/initramfs.conf
