@@ -75,7 +75,7 @@ write_files:
       # Our own desktop (XFCE) + tools from Debian — installed one-by-one so a
       # single unavailable package can't abort the batch.
       PKGS="xfce4 xfce4-terminal xfce4-goodies lightdm dbus-x11 firefox-esr \
-        git curl wget jq unzip build-essential python3 python3-pip pipx golang-go nodejs npm \
+        git curl wget jq unzip build-essential python3 python3-pip pipx nodejs npm \
         nmap masscan dnsutils whois net-tools tcpdump \
         nikto whatweb wafw00f dnsrecon dirb wfuzz gobuster \
         sqlmap hydra john hashcat \
@@ -97,12 +97,16 @@ write_files:
       [ -d /usr/share/seclists ] || git clone --depth 1 https://github.com/danielmiessler/SecLists /usr/share/seclists || true
       [ -d /opt/exploitdb ] || git clone --depth 1 https://gitlab.com/exploit-database/exploitdb /opt/exploitdb || true
       ln -sf /opt/exploitdb/searchsploit /usr/local/bin/searchsploit 2>/dev/null || true
-      # ProjectDiscovery essentials + others via go install
-      export GOBIN=/usr/local/bin GOPATH=/root/go
-      export GOFLAGS=-mod=mod; for g in "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest" \
-               "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest" \
-               "github.com/projectdiscovery/httpx/cmd/httpx@latest" \
-               "github.com/ffuf/ffuf/v2@latest"; do timeout 360 go install "$g" || echo "GOSKIP $g"; done
+      # ProjectDiscovery + ffuf via PREBUILT release binaries (no compile, no Go-version issues)
+      mkdir -p /tmp/pd
+      for repo in projectdiscovery/nuclei projectdiscovery/subfinder projectdiscovery/httpx ffuf/ffuf; do
+        url=$(curl -fsSL --max-time 30 "https://api.github.com/repos/$repo/releases/latest" | jq -r '.assets[].browser_download_url' | grep -iE 'linux_amd64\.(zip|tar\.gz)$' | grep -viE 'arm|386|sdk' | head -1)
+        [ -n "$url" ] || { echo "PDSKIP $repo"; continue; }
+        curl -fsSL --max-time 120 -o /tmp/pd/a "$url" || { echo "PDSKIP $repo"; continue; }
+        case "$url" in *.zip) (cd /tmp/pd && unzip -oq a);; *) tar xzf /tmp/pd/a -C /tmp/pd 2>/dev/null;; esac
+        for f in /tmp/pd/*; do [ "$f" = /tmp/pd/a ] && continue; file "$f" 2>/dev/null | grep -q ELF && install -m0755 "$f" /usr/local/bin/; rm -f "$f"; done
+        rm -f /tmp/pd/a
+      done
       pipx install netexec 2>/dev/null || true; pipx ensurepath 2>/dev/null || true
       # Local AI for autonomous hacking
       timeout 300 bash -c "curl -fsSL https://ollama.com/install.sh | sh" || echo OLLAMA-SKIP
