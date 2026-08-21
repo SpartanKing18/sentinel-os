@@ -98,7 +98,7 @@ write_files:
       echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
       # Our own desktop (XFCE) + tools from Debian — installed one-by-one so a
       # single unavailable package can't abort the batch.
-      PKGS="xfce4 xfce4-terminal xfce4-goodies lightdm dbus-x11 firefox-esr \
+      PKGS="xfce4 xfce4-terminal xfce4-goodies xfce4-whiskermenu-plugin lightdm dbus-x11 firefox-esr \
         git curl wget jq unzip build-essential python3 python3-pip pipx nodejs npm \
         nmap masscan dnsutils whois net-tools tcpdump \
         nikto whatweb wafw00f dnsrecon dirb wfuzz gobuster \
@@ -155,6 +155,7 @@ write_files:
       gen-sentinel-menu 2>/dev/null || true
       install -d /usr/share/backgrounds; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-wallpaper.png" -o /usr/share/backgrounds/sentinel-wallpaper.png 2>/dev/null || true
       install -d /usr/share/pixmaps; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/google-icon.png" -o /usr/share/pixmaps/sentinel-google.png 2>/dev/null || true
+      curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-menu.png" -o /usr/share/pixmaps/sentinel-menu.png 2>/dev/null || true
       # Make the image bootable on ANY hypervisor disk controller (VirtualBox
       # SATA/AHCI, VMware) — the Debian cloud initramfs is virtio-only by default.
       sed -i 's/^MODULES=.*/MODULES=most/' /etc/initramfs-tools/initramfs.conf 2>/dev/null || echo "MODULES=most" >> /etc/initramfs-tools/initramfs.conf

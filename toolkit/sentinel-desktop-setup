@@ -3,10 +3,13 @@
 set -u
 WALL=/usr/share/backgrounds/sentinel-wallpaper.png
 for i in $(seq 1 20); do xfconf-query -c xfce4-desktop -l >/dev/null 2>&1 && break; sleep 1; done
-# dark theme (Arc-Dark if present, else Adwaita-dark) + Papirus icons
-xfconf-query -c xsettings -p /Net/ThemeName -s "Arc-Dark" 2>/dev/null || xfconf-query -c xsettings -p /Net/ThemeName -s "Adwaita-dark" 2>/dev/null
-xfconf-query -c xfwm4 -p /general/theme -s "Arc-Dark" 2>/dev/null || xfconf-query -c xfwm4 -p /general/theme -s "Adwaita-dark" 2>/dev/null
-xfconf-query -c xsettings -p /Net/IconThemeName -s "Papirus-Dark" 2>/dev/null || true
+# dark theme — pick the best that is ACTUALLY installed (a missing theme name
+# silently falls back to light Adwaita, so check the dirs rather than trusting -s).
+TH=Adwaita-dark; [ -d /usr/share/themes/Arc-Dark ] && TH=Arc-Dark
+IC=Adwaita;      [ -d /usr/share/icons/Papirus-Dark ] && IC=Papirus-Dark
+xfconf-query -c xsettings -p /Net/ThemeName     -n -t string -s "$TH" 2>/dev/null
+xfconf-query -c xfwm4     -p /general/theme      -n -t string -s "$TH" 2>/dev/null
+xfconf-query -c xsettings -p /Net/IconThemeName -n -t string -s "$IC" 2>/dev/null
 # wallpaper on all existing backdrop props + monitor0/Virtual-1 fallbacks
 if [ -f "$WALL" ]; then
   while read -r p; do [ -n "$p" ] && xfconf-query -c xfce4-desktop -p "$p" -s "$WALL" 2>/dev/null; done < <(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E 'last-image$')
@@ -38,14 +41,48 @@ xfconf-query -c xfce4-panel -p /plugins/plugin-23 -n -t string -s launcher 2>/de
   xfconf-query -c xfce4-panel -p /plugins/plugin-23 -t string -s launcher 2>/dev/null
 xfconf-query -c xfce4-panel -p /plugins/plugin-23/items -n -t string -s google.desktop -a 2>/dev/null || \
   xfconf-query -c xfce4-panel -p /plugins/plugin-23/items -t string -s google.desktop -a 2>/dev/null
-# top panel order: Apps | terminal browser files GOOGLE | sep | tasklist pager | tray... | clock | actions
-# (plugin ids from the stock XFCE layout: 17=terminal 18=files 19=browser 20=appfinder)
+# --- Whisker menu (searchable, Kali-style) as plugin-24, branded "Sentinel" ---
+# Whisker stores its own settings in an .rc file, NOT xfconf, so write both.
+if [ -x /usr/lib/x86_64-linux-gnu/xfce4/panel/plugins/libwhiskermenu.so ] || \
+   ls /usr/lib/*/xfce4/panel/plugins/libwhiskermenu.so >/dev/null 2>&1; then
+  MICON=/usr/share/pixmaps/sentinel-menu.png
+  [ -f "$MICON" ] || MICON=start-here
+  xfconf-query -c xfce4-panel -p /plugins/plugin-24 -n -t string -s whiskermenu 2>/dev/null
+  cat > "$HOME/.config/xfce4/panel/whiskermenu-24.rc" <<RCEOF
+favorites=exo-open --launch TerminalEmulator,firefox-esr.desktop,exo-open --launch FileManager
+recent=
+button-title=Sentinel
+button-icon=$MICON
+show-button-title=true
+show-button-icon=true
+show-command-settings=true
+show-command-lockscreen=true
+show-command-logout=true
+category-show-name=true
+launcher-show-name=true
+launcher-show-description=true
+position-search-alternate=true
+position-commands-alternate=true
+menu-width=500
+menu-height=550
+RCEOF
+  MENU=24
+else
+  MENU=1   # fall back to the stock applications menu
+fi
+
+# top panel order: [Sentinel menu] terminal browser files GOOGLE | sep | tasklist pager | tray... | clock | actions
+# (stock XFCE plugin ids: 17=terminal 18=files 19=browser)
 if xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids >/dev/null 2>&1; then
   xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids -a \
-    -t int -s 1 -t int -s 17 -t int -s 19 -t int -s 18 -t int -s 23 \
+    -t int -s "$MENU" -t int -s 17 -t int -s 19 -t int -s 18 -t int -s 23 \
     -t int -s 3 -t int -s 2 -t int -s 4 -t int -s 5 -t int -s 6 \
     -t int -s 8 -t int -s 9 -t int -s 10 -t int -s 11 -t int -s 12 -t int -s 13 -t int -s 14 2>/dev/null
-  xfconf-query -c xfce4-panel -p /panels/panel-1/size -t int -s 34 2>/dev/null || true
+  # taller bar + dark, translucent, teal-tinted background
+  xfconf-query -c xfce4-panel -p /panels/panel-1/size -n -t int -s 36 2>/dev/null
+  xfconf-query -c xfce4-panel -p /panels/panel-1/background-style -n -t int -s 1 2>/dev/null
+  xfconf-query -c xfce4-panel -p /panels/panel-1/background-rgba -n -a \
+    -t double -s 0.035 -t double -s 0.086 -t double -s 0.110 -t double -s 0.94 2>/dev/null
   # collapse to a single top panel (drop the bottom dock)
   xfconf-query -c xfce4-panel -p /panels -a -t int -s 1 2>/dev/null
   xfce4-panel -r 2>/dev/null || true
