@@ -49,10 +49,15 @@ write_files:
       [Desktop Entry]
       Type=Application
       Name=Sentinel
-      Exec=sentinel-app
+      Exec=env SENTINEL_NO_BOOT=1 sentinel-app
       X-GNOME-Autostart-enabled=true
     owner: sentinel:sentinel
     defer: true
+  # Firefox opens the Sentinel web console as its homepage/bookmark (an "extra",
+  # like Kali's docs bookmark) — the app is the primary UI, this is the site.
+  - path: /etc/firefox-esr/policies/policies.json
+    content: |
+      {"policies":{"Homepage":{"URL":"https://sentinel-web-2hq9.onrender.com","StartPage":"homepage"},"OverrideFirstRunPage":"https://sentinel-web-2hq9.onrender.com","DontCheckDefaultBrowser":true,"Bookmarks":[{"Title":"Sentinel Console","URL":"https://sentinel-web-2hq9.onrender.com","Placement":"toolbar"}]}}
   - path: /usr/local/bin/sentinel-autopilot
     permissions: "0755"
     content: |

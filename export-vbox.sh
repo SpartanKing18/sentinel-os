@@ -16,7 +16,7 @@ command -v VBoxManage >/dev/null || { echo "VirtualBox (VBoxManage) not found"; 
 
 if ! VBoxManage list vms | grep -q "\"$VM\""; then
   VBoxManage createvm --name "$VM" --ostype Debian_64 --register
-  VBoxManage modifyvm "$VM" --memory 4096 --cpus 2 --vram 128 --graphicscontroller vmsvga --nic1 nat --nictype1 virtio --audio-driver none
+  VBoxManage modifyvm "$VM" --memory 4096 --cpus 2 --vram 128 --graphicscontroller vmsvga --nic1 nat --nictype1 virtio --audio-driver none --usbohci on --mouse usbtablet --keyboard usb
   # virtio-scsi, NOT SATA: the Debian cloud initramfs is virtio-only, so a SATA/AHCI
   # controller leaves it unable to find the root disk ("Gave up waiting for root").
   VBoxManage storagectl "$VM" --name VIRTIO --add virtio-scsi
