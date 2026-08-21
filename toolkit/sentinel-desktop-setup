@@ -16,4 +16,39 @@ if [ -f "$WALL" ]; then
   done
   xfdesktop --reload 2>/dev/null
 fi
+
+# --- Kali-style single top panel: launchers up top + a Google web-search button ---
+GICON=/usr/share/pixmaps/sentinel-google.png
+[ -f "$GICON" ] || GICON=web-browser   # graceful fallback icon name
+mkdir -p "$HOME/.config/xfce4/panel/launcher-23"
+cat > "$HOME/.config/xfce4/panel/launcher-23/google.desktop" <<DESK
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Google Search
+Comment=Search the web with Google
+Exec=firefox-esr https://www.google.com
+Icon=$GICON
+Terminal=false
+StartupNotify=false
+Categories=Network;WebBrowser;
+DESK
+# register the Google launcher as panel plugin 23 (idempotent)
+xfconf-query -c xfce4-panel -p /plugins/plugin-23 -n -t string -s launcher 2>/dev/null || \
+  xfconf-query -c xfce4-panel -p /plugins/plugin-23 -t string -s launcher 2>/dev/null
+xfconf-query -c xfce4-panel -p /plugins/plugin-23/items -n -t string -s google.desktop -a 2>/dev/null || \
+  xfconf-query -c xfce4-panel -p /plugins/plugin-23/items -t string -s google.desktop -a 2>/dev/null
+# top panel order: Apps | terminal browser files GOOGLE | sep | tasklist pager | tray... | clock | actions
+# (plugin ids from the stock XFCE layout: 17=terminal 18=files 19=browser 20=appfinder)
+if xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids >/dev/null 2>&1; then
+  xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids -a \
+    -t int -s 1 -t int -s 17 -t int -s 19 -t int -s 18 -t int -s 23 \
+    -t int -s 3 -t int -s 2 -t int -s 4 -t int -s 5 -t int -s 6 \
+    -t int -s 8 -t int -s 9 -t int -s 10 -t int -s 11 -t int -s 12 -t int -s 13 -t int -s 14 2>/dev/null
+  xfconf-query -c xfce4-panel -p /panels/panel-1/size -t int -s 34 2>/dev/null || true
+  # collapse to a single top panel (drop the bottom dock)
+  xfconf-query -c xfce4-panel -p /panels -a -t int -s 1 2>/dev/null
+  xfce4-panel -r 2>/dev/null || true
+fi
+
 rm -f "$HOME/.config/autostart/sentinel-desktop-setup.desktop"

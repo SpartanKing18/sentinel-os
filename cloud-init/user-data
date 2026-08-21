@@ -154,6 +154,7 @@ write_files:
       command -v firecfg >/dev/null && firecfg >/dev/null 2>&1 || true   # auto-sandbox common apps
       gen-sentinel-menu 2>/dev/null || true
       install -d /usr/share/backgrounds; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-wallpaper.png" -o /usr/share/backgrounds/sentinel-wallpaper.png 2>/dev/null || true
+      install -d /usr/share/pixmaps; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/google-icon.png" -o /usr/share/pixmaps/sentinel-google.png 2>/dev/null || true
       # Make the image bootable on ANY hypervisor disk controller (VirtualBox
       # SATA/AHCI, VMware) — the Debian cloud initramfs is virtio-only by default.
       sed -i 's/^MODULES=.*/MODULES=most/' /etc/initramfs-tools/initramfs.conf 2>/dev/null || echo "MODULES=most" >> /etc/initramfs-tools/initramfs.conf
