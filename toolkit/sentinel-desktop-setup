@@ -36,29 +36,32 @@ xfconf-query -c xfwm4 -p /general/show_popup_shadow -n -t bool -s true 2>/dev/nu
 mkdir -p "$HOME/.config/xfce4/terminal"
 cat > "$HOME/.config/xfce4/terminal/terminalrc" <<'RC'
 [Configuration]
-FontName=JetBrains Mono 11
+FontName=JetBrains Mono 12
+FontAllowBold=TRUE
 MiscMenubarDefault=FALSE
 MiscToolbarDefault=FALSE
 MiscBordersDefault=TRUE
-MiscDefaultGeometry=110x30
+MiscDefaultGeometry=104x28
 MiscConfirmClose=TRUE
 MiscHighlightUrls=TRUE
 MiscCursorShape=TERMINAL_CURSOR_SHAPE_BLOCK
+MiscCursorBlinks=FALSE
+CellHeightScale=1.060000
+CellWidthScale=1.000000
 ScrollingBar=TERMINAL_SCROLLBAR_NONE
 ScrollingUnlimited=TRUE
-BackgroundMode=TERMINAL_BACKGROUND_TRANSPARENT
-BackgroundDarkness=0.970000
-ColorForeground=#c9d1d9
+BackgroundMode=TERMINAL_BACKGROUND_SOLID
+ColorForeground=#d6dee8
 ColorBackground=#0d1117
 ColorCursor=#1ce0d0
 ColorCursorForeground=#0d1117
-ColorBold=#f0f6fc
+ColorBold=#ffffff
 ColorBoldUseDefault=FALSE
-ColorSelection=#1ce0d0
+ColorSelection=#0d1117
 ColorSelectionUseDefault=FALSE
-ColorSelectionBackground=#193b3a
+ColorSelectionBackground=#1ce0d0
 TabActivityColor=#1ce0d0
-ColorPalette=#484f58;#ff7b72;#3fb950;#d29922;#58a6ff;#bc8cff;#39c5cf;#b1bac4;#6e7681;#ffa198;#56d364;#e3b341;#79c0ff;#d2a8ff;#56d4dd;#f0f6fc
+ColorPalette=#5b6672;#ff7b72;#3fb950;#e3b341;#58a6ff;#bc8cff;#39c5cf;#c9d1d9;#6e7681;#ffa198;#56d364;#f2cc60;#79c0ff;#d2a8ff;#56d4dd;#ffffff
 RC
 
 # --- disable the disruptive idle screen-lock (light-locker spawns a separate
