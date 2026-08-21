@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# System-wide Tor anonymization with an nftables kill-switch + leak self-test.
+# Improves on AnonSurf: native nftables, debian-tor uid, verifies before saying "on".
+set -uo pipefail
+TOR_UID="$(id -u debian-tor 2>/dev/null || id -u tor 2>/dev/null || echo 0)"
+TRANS=9040; DNSP=5353; VIRT="10.192.0.0/10"
+need_root(){ [ "$(id -u)" = 0 ] || exec sudo "$0" "$@"; }
+torrc(){ grep -q "TransPort $TRANS" /etc/tor/torrc 2>/dev/null || printf '\n# sentinel-anon\nVirtualAddrNetwork %s\nAutomapHostsOnResolve 1\nTransPort %s\nDNSPort %s\n' "$VIRT" "$TRANS" "$DNSP" >> /etc/tor/torrc; }
+leaktest(){ local j; j="$(curl -s --max-time 12 https://check.torproject.org/api/ip 2>/dev/null)"; echo "$j" | grep -q '"IsTor":true' && echo "[+] anon ON — Tor exit confirmed: $j" || echo "[!] Tor check failed — do NOT assume you are anonymized"; }
+start(){ need_root start; torrc; systemctl restart tor@default 2>/dev/null || systemctl restart tor 2>/dev/null
+  sysctl -q -w net.ipv6.conf.all.disable_ipv6=1; sysctl -q -w net.ipv6.conf.default.disable_ipv6=1
+  nft -f - <<NFT
+table inet sentinel_anon {
+  chain nat { type nat hook output priority -100; policy accept;
+    meta skuid $TOR_UID return
+    ip daddr { 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } return
+    udp dport 53 redirect to :$DNSP
+    meta l4proto tcp ct state new redirect to :$TRANS
+  }
+  chain kill { type filter hook output priority 100; policy drop;
+    meta skuid $TOR_UID accept
+    oifname "lo" accept
+    ip daddr { 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } accept
+  }
+}
+NFT
+  echo "[*] verifying (2s)…"; sleep 2; leaktest; }
+stop(){ need_root stop; nft delete table inet sentinel_anon 2>/dev/null; sysctl -q -w net.ipv6.conf.all.disable_ipv6=0; echo "[+] anon OFF (direct connection restored)"; }
+newid(){ need_root newid; systemctl reload tor@default 2>/dev/null || systemctl restart tor; echo "[+] new Tor identity"; }
+case "${1:-status}" in start)start;; stop)stop;; status|test)leaktest;; newid|rotate)newid;; *)echo "usage: sentinel-anon start|stop|status|newid";; esac

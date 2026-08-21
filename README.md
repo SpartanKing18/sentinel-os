@@ -17,6 +17,8 @@ packages), a local-AI autonomous layer, and the Sentinel app as the UI cockpit.
   subfinder / httpx / ffuf / netexec**
 - **Autonomous AI (Ollama)** — the desktop **Autopilot** and `sentinel nexus run`
   do recon + exploitation toward a goal, offline
+- **Adopted-and-improved distro features:** `sentinel-anon` (system-wide Tor + nftables kill-switch + leak self-test, à la Parrot AnonSurf), `sentinel-stealth` (undercover desktop, à la Kali), `sentinel-macspoof` (MAC randomization), `sentinel-detonate` (firejail sandbox for untrusted files), `sentinel-arsenal` (on-demand tool groups, à la BlackArch), a categorized **Sentinel menu**, and `sentinel-tweaks` (a whiptail control center tying them together)
+- **Unique AI features (local LLM):** `sentinel-triage <target>` (AI plans+runs recon → summary+next steps), `sentinel-engage <target>` (engagement workspace + auto-drafted report), `sentinel-ask "..."` (natural-language → command), plus the desktop **Autopilot**
 - **Docker practice lab** (`sentinel lab up`)
 
 ## Build & run

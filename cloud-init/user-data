@@ -82,6 +82,9 @@ write_files:
         aircrack-ng wireshark ettercap-graphical \
         radare2 binwalk foremost sleuthkit \
         netcat-traditional python3-impacket \
+        tor nftables firejail firejail-profiles apparmor apparmor-utils macchanger \
+        proxychains4 torsocks keepassxc gnupg whiptail desktop-file-utils \
+        xdotool wmctrl libimage-exiftool-perl \
         docker.io docker-compose-plugin"
       for p in $PKGS; do apt-get install -y "$p" || echo "SKIP $p"; done
       usermod -aG docker sentinel 2>/dev/null || true
@@ -110,6 +113,14 @@ write_files:
       [ -d /opt/sentinel-cli ] || git clone --depth 1 https://github.com/SpartanKing18/sentinel-cli /opt/sentinel-cli
       ( cd /opt/sentinel-cli && { npm install --omit=dev --no-audit --no-fund || npm install --no-audit --no-fund; }; npm link || ln -sf /opt/sentinel-cli/sentinel.js /usr/local/bin/sentinel )
       chmod +x /opt/sentinel-cli/sentinel.js || true
+      # Sentinel toolkit — adopted-and-improved distro features + unique AI tools
+      for s in sentinel-anon sentinel-macspoof sentinel-detonate sentinel-stealth \
+               sentinel-ask sentinel-triage sentinel-engage sentinel-arsenal \
+               sentinel-tweaks gen-sentinel-menu; do
+        curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/$s" -o "/usr/local/bin/$s" && chmod +x "/usr/local/bin/$s" || echo "TOOLKIT-SKIP $s"
+      done
+      command -v firecfg >/dev/null && firecfg >/dev/null 2>&1 || true   # auto-sandbox common apps
+      gen-sentinel-menu 2>/dev/null || true
       # Desktop cockpit shortcuts
       install -d -o sentinel -g sentinel /home/sentinel/Desktop
       cat > /home/sentinel/Desktop/Sentinel.desktop <<'D'
@@ -125,6 +136,14 @@ write_files:
       Name=Sentinel Autopilot
       Comment=Autonomous AI hacking — give a goal, the local agent runs it
       Exec=xfce4-terminal --title="Sentinel Autopilot" -e sentinel-autopilot
+      Terminal=false
+      D
+      cat > /home/sentinel/Desktop/Sentinel-Tweaks.desktop <<'D'
+      [Desktop Entry]
+      Type=Application
+      Name=Sentinel Tweaks
+      Comment=Control center — anon mode, stealth, MAC spoof, arsenals, AI triage
+      Exec=xfce4-terminal --title="Sentinel Tweaks" -e sentinel-tweaks
       Terminal=false
       D
       chown sentinel:sentinel /home/sentinel/Desktop/*.desktop 2>/dev/null || true

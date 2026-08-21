@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Create an engagement workspace, run scoped recon, and draft a Markdown report.
+set -uo pipefail
+T="${1:-}"; [ -n "$T" ] || { echo "usage: sentinel-engage <target>"; exit 1; }
+MODEL="${SENTINEL_MODEL:-llama3.2:3b}"
+DIR="$HOME/engagements/${T//[^A-Za-z0-9._-]/_}-$(date +%Y%m%d-%H%M)"; mkdir -p "$DIR"/{scans,loot,notes}
+echo "[*] engagement workspace: $DIR"
+nmap -Pn -T4 --top-ports 500 -sV "$T" > "$DIR/scans/nmap.txt" 2>&1 || true
+command -v whatweb >/dev/null && whatweb "$T" > "$DIR/scans/whatweb.txt" 2>&1 || true
+DATA="$(cat "$DIR"/scans/*.txt 2>/dev/null | head -c 8000)"
+pgrep -x ollama >/dev/null || (nohup ollama serve >/dev/null 2>&1 &) ; sleep 1
+ollama list 2>/dev/null | grep -qi "${MODEL%%:*}" || ollama pull "$MODEL" >/dev/null 2>&1
+P="Write a professional penetration-test report in Markdown for target $T from this recon. Sections: Executive Summary, Scope, Methodology, Findings (each with risk rating + evidence), Recommendations. Recon:\n$DATA"
+curl -s http://127.0.0.1:11434/api/generate -d "$(jq -nc --arg m "$MODEL" --arg p "$P" '{model:$m,prompt:$p,stream:false}')" | jq -r '.response' > "$DIR/report.md"
+echo "[+] draft report: $DIR/report.md"; command -v xdg-open >/dev/null && xdg-open "$DIR/report.md" 2>/dev/null &

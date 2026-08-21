@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Statically triage + safely open an untrusted file: no network, private tmpfs
+# home, read-only fs, seccomp. Also runs quick static analysis.
+set -uo pipefail
+F="${1:-}"; [ -f "$F" ] || { echo "usage: sentinel-detonate <file>"; exit 1; }
+echo "== static triage: $F =="; file "$F"; echo; echo "-- strings (top) --"; strings -n 6 "$F" 2>/dev/null | head -40
+command -v exiftool >/dev/null && { echo; echo "-- metadata --"; exiftool "$F" 2>/dev/null | head -30; }
+command -v binwalk >/dev/null && { echo; echo "-- embedded --"; binwalk "$F" 2>/dev/null | head -20; }
+echo; read -rp "Open in a no-network sandbox? [y/N] " a; [ "$a" = y ] || exit 0
+firejail --quiet --net=none --private --read-only=/ xdg-open "$F" 2>/dev/null || firejail --net=none --private xdg-open "$F"

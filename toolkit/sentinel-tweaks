@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Sentinel control center — toggle modes (Predator-OS/kali-tweaks style).
+command -v whiptail >/dev/null || { echo "install whiptail"; exit 1; }
+while C=$(whiptail --title "Sentinel Tweaks" --menu "Mode / action" 20 64 11 \
+  anon-on "Route ALL traffic through Tor (+kill-switch)" \
+  anon-off "Disable Tor routing" \
+  anon-test "Check anonymity (leak test)" \
+  stealth "Toggle undercover/stealth desktop" \
+  mac "Randomize MAC address" \
+  arsenal "Install a tool arsenal group" \
+  triage "AI-triage a target" \
+  ask "Natural-language command" \
+  quit "Exit" 3>&1 1>&2 2>&3); do
+  case "$C" in
+    anon-on) sudo sentinel-anon start;; anon-off) sudo sentinel-anon stop;; anon-test) sentinel-anon status;;
+    stealth) sentinel-stealth toggle;; mac) sudo sentinel-macspoof random;;
+    arsenal) g=$(whiptail --inputbox "group: web/wireless/forensics/recon/crypto/passwords/blue" 8 64 3>&1 1>&2 2>&3) && sudo sentinel-arsenal install "$g";;
+    triage) t=$(whiptail --inputbox "target ip/domain" 8 60 3>&1 1>&2 2>&3) && sentinel-triage "$t";;
+    ask) q=$(whiptail --inputbox "what do you want to do?" 8 64 3>&1 1>&2 2>&3) && sentinel-ask "$q";;
+    quit) break;;
+  esac; read -rp "press enter…" _
+done

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# On-demand tool arsenals (BlackArch-style groups) from Debian repos.
+set -uo pipefail
+[ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
+export DEBIAN_FRONTEND=noninteractive; grp="${2:-}"
+ins(){ for p in "$@"; do apt-get install -y "$p" 2>/dev/null || echo "  skip $p"; done; }
+case "${1:-list}" in
+  list) echo "arsenals: web wireless forensics recon crypto passwords blue";;
+  install) apt-get update -y >/dev/null 2>&1 || true
+    case "$grp" in
+      web) ins nikto wapiti dirb wfuzz gobuster sqlmap skipfish;;
+      wireless) ins aircrack-ng reaver kismet wifite hcxtools bully mdk4;;
+      forensics) ins sleuthkit foremost scalpel testdisk gddrescue ddrescue;;
+      recon) ins dnsrecon dnsenum fierce whatweb;;
+      crypto) ins hashcat john hashid cryptsetup;;
+      passwords) ins hydra john hashcat cewl crunch;;
+      blue) ins suricata zeek tcpdump;;
+      *) echo "unknown group; try: sentinel-arsenal list"; exit 1;;
+    esac; echo "[+] arsenal '$grp' installed";;
+  *) echo "usage: sentinel-arsenal list | install <group>";;
+esac

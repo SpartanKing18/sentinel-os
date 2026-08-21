@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Build a categorized "Sentinel" application menu from installed tools.
+set -uo pipefail
+APPS=/usr/share/applications; DIRS=/usr/share/desktop-directories
+mkdir -p "$APPS" "$DIRS" /etc/xdg/menus/applications-merged
+# category : tools (only launchers for installed binaries are emitted)
+declare -A CAT=(
+ [Recon]="nmap masscan dnsrecon whatweb theharvester subfinder httpx"
+ [Web]="nikto sqlmap gobuster ffuf wfuzz dirb wpscan"
+ [Passwords]="hydra john hashcat"
+ [Wireless]="aircrack-ng kismet"
+ [Exploitation]="msfconsole searchsploit"
+ [Forensics]="binwalk foremost sleuthkit"
+ [Sniffing]="wireshark ettercap tcpdump"
+)
+for c in "${!CAT[@]}"; do
+  cat > "$DIRS/sentinel-${c,,}.directory" <<D
+[Desktop Entry]
+Type=Directory
+Name=Sentinel $c
+Icon=applications-system
+D
+  for t in ${CAT[$c]}; do command -v "$t" >/dev/null || continue
+    cat > "$APPS/sentinel-$t.desktop" <<A
+[Desktop Entry]
+Type=Application
+Name=$t
+Comment=$c tool
+Exec=xfce4-terminal --title=$t -e "bash -lc '$t --help 2>&1 | less || $t; exec bash'"
+Terminal=false
+Categories=X-Sentinel-$c;
+A
+  done
+done
+cat > /etc/xdg/menus/applications-merged/sentinel.menu <<'M'
+<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN" "http://www.freedesktop.org/standards/menu-spec/menu-1.0.dtd">
+<Menu><Name>Applications</Name><Menu><Name>Sentinel</Name><Directory>sentinel.directory</Directory>
+M
+for c in "${!CAT[@]}"; do printf '<Menu><Name>%s</Name><Directory>sentinel-%s.directory</Directory><Include><Category>X-Sentinel-%s</Category></Include></Menu>\n' "$c" "${c,,}" "$c" >> /etc/xdg/menus/applications-merged/sentinel.menu; done
+echo '</Menu></Menu>' >> /etc/xdg/menus/applications-merged/sentinel.menu
+cat > "$DIRS/sentinel.directory" <<D
+[Desktop Entry]
+Type=Directory
+Name=Sentinel
+Icon=applications-system
+D
+update-desktop-database "$APPS" 2>/dev/null || true
+echo "[+] Sentinel menu generated"

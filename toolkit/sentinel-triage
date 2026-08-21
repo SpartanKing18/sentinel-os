@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# AI target triage: run a recon chain against a target and get an AI summary + next steps.
+set -uo pipefail
+T="${1:-}"; [ -n "$T" ] || { echo "usage: sentinel-triage <ip|domain>"; exit 1; }
+MODEL="${SENTINEL_MODEL:-llama3.2:3b}"; OUT="$(mktemp -d)"
+echo "[*] recon $T (this runs nmap — authorized targets only)…"
+nmap -Pn -T4 --top-ports 200 -sV "$T" > "$OUT/nmap.txt" 2>&1 || true
+command -v whatweb >/dev/null && whatweb "$T" > "$OUT/whatweb.txt" 2>&1 || true
+DATA="$(cat "$OUT"/*.txt 2>/dev/null | head -c 6000)"
+pgrep -x ollama >/dev/null || (nohup ollama serve >/dev/null 2>&1 &) ; sleep 1
+ollama list 2>/dev/null | grep -qi "${MODEL%%:*}" || ollama pull "$MODEL" >/dev/null 2>&1
+P="You are a penetration tester. From this recon of $T, give: (1) open services+versions, (2) attack surface, (3) top 3 concrete next steps with exact tool commands. Recon:\n$DATA"
+echo; echo "===== AI triage: $T ====="
+curl -s http://127.0.0.1:11434/api/generate -d "$(jq -nc --arg m "$MODEL" --arg p "$P" '{model:$m,prompt:$p,stream:false}')" | jq -r '.response'
+echo; echo "(raw scans: $OUT)"

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Randomize (or restore) the MAC of an interface. Default: first non-lo iface.
+[ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
+IF="${2:-$(ip -o link show | awk -F': ' '$2!="lo"{print $2; exit}')}"
+case "${1:-random}" in
+  random) ip link set "$IF" down; macchanger -r "$IF"; ip link set "$IF" up; echo "[+] $IF randomized";;
+  restore) ip link set "$IF" down; macchanger -p "$IF"; ip link set "$IF" up; echo "[+] $IF restored";;
+  show) macchanger -s "$IF";;
+  *) echo "usage: sentinel-macspoof random|restore|show [iface]";;
+esac
