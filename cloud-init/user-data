@@ -60,7 +60,7 @@ write_files:
   # like Kali's docs bookmark) — the app is the primary UI, this is the site.
   - path: /etc/firefox-esr/policies/policies.json
     content: |
-      {"policies":{"Homepage":{"URL":"https://sentinel-web-2hq9.onrender.com","StartPage":"homepage"},"OverrideFirstRunPage":"https://sentinel-web-2hq9.onrender.com","DontCheckDefaultBrowser":true,"Bookmarks":[{"Title":"Sentinel Console","URL":"https://sentinel-web-2hq9.onrender.com","Placement":"toolbar"}]}}
+      {"policies":{"Homepage":{"URL":"https://sentinel-web-2hq9.onrender.com","StartPage":"homepage"},"OverrideFirstRunPage":"https://sentinel-web-2hq9.onrender.com","DontCheckDefaultBrowser":true,"SearchEngines":{"Default":"Google"},"SearchBar":"unified","Bookmarks":[{"Title":"Sentinel Console","URL":"https://sentinel-web-2hq9.onrender.com","Placement":"toolbar"}]}}
   - path: /usr/local/bin/sentinel-autopilot
     permissions: "0755"
     content: |
