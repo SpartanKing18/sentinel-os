@@ -56,11 +56,9 @@ write_files:
       X-GNOME-Autostart-enabled=true
     owner: sentinel:sentinel
     defer: true
-  # Firefox opens the Sentinel web console as its homepage/bookmark (an "extra",
-  # like Kali's docs bookmark) — the app is the primary UI, this is the site.
-  - path: /etc/firefox-esr/policies/policies.json
-    content: |
-      {"policies":{"Homepage":{"URL":"https://sentinel-web-2hq9.onrender.com","StartPage":"homepage"},"OverrideFirstRunPage":"https://sentinel-web-2hq9.onrender.com","DontCheckDefaultBrowser":true,"SearchEngines":{"Default":"Google"},"SearchBar":"unified","Bookmarks":[{"Title":"Sentinel Console","URL":"https://sentinel-web-2hq9.onrender.com","Placement":"toolbar"}]}}
+  # (Firefox default homepage = the Sentinel web console is set via autoconfig in
+  # provision.sh — a user-CHANGEABLE default with no "managed by your org" banner.
+  # A policy is deliberately NOT used so Google + all Firefox settings stay editable.)
   - path: /usr/local/bin/sentinel-autopilot
     permissions: "0755"
     content: |
@@ -157,6 +155,16 @@ write_files:
       install -d /usr/share/backgrounds; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-wallpaper.png" -o /usr/share/backgrounds/sentinel-wallpaper.png 2>/dev/null || true
       install -d /usr/share/pixmaps; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/google-icon.png" -o /usr/share/pixmaps/sentinel-google.png 2>/dev/null || true
       curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-menu.png" -o /usr/share/pixmaps/sentinel-menu.png 2>/dev/null || true
+      # Firefox: default startup page = Sentinel console, via autoconfig (a
+      # user-CHANGEABLE default, NOT a policy — so no "managed by your organization"
+      # banner and Google + all settings remain freely editable). Google stays the
+      # built-in default search engine.
+      FFLIB=$(ls -d /usr/lib/firefox-esr /usr/lib/firefox 2>/dev/null | head -1)
+      if [ -n "$FFLIB" ]; then
+        install -d "$FFLIB/defaults/pref"
+        curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/firefox-autoconfig.js" -o "$FFLIB/defaults/pref/autoconfig.js" 2>/dev/null || true
+        curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/firefox-sentinel.cfg" -o "$FFLIB/sentinel.cfg" 2>/dev/null || true
+      fi
       # branded LightDM login screen (dark, Sentinel wallpaper, teal accent)
       cat > /etc/lightdm/lightdm-gtk-greeter.conf <<'GRE'
       [greeter]
