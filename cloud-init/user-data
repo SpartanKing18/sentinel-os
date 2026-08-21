@@ -117,8 +117,8 @@ write_files:
       apt-get update -y || true
       timeout 900 apt-get install -y metasploit-framework || echo "MSF-SKIP"
       # SecLists + Exploit-DB (searchsploit)
-      [ -d /usr/share/seclists ] || git clone --depth 1 https://github.com/danielmiessler/SecLists /usr/share/seclists || true
-      [ -d /opt/exploitdb ] || git clone --depth 1 https://gitlab.com/exploit-database/exploitdb /opt/exploitdb || true
+      [ -d /usr/share/seclists ] || timeout 400 git clone --depth 1 https://github.com/danielmiessler/SecLists /usr/share/seclists || echo SECLISTS-SKIP
+      [ -d /opt/exploitdb ] || timeout 300 git clone --depth 1 https://gitlab.com/exploit-database/exploitdb /opt/exploitdb || echo EDB-SKIP
       ln -sf /opt/exploitdb/searchsploit /usr/local/bin/searchsploit 2>/dev/null || true
       # ProjectDiscovery + ffuf via PREBUILT release binaries (no compile, no Go-version issues)
       mkdir -p /tmp/pd
@@ -130,15 +130,15 @@ write_files:
         for f in /tmp/pd/*; do [ "$f" = /tmp/pd/a ] && continue; file "$f" 2>/dev/null | grep -q ELF && install -m0755 "$f" /usr/local/bin/; rm -f "$f"; done
         rm -f /tmp/pd/a
       done
-      pipx install netexec 2>/dev/null || true; pipx ensurepath 2>/dev/null || true
+      timeout 240 pipx install netexec 2>/dev/null || echo NXC-SKIP; pipx ensurepath 2>/dev/null || true
       # Local AI for autonomous hacking
       timeout 300 bash -c "curl -fsSL https://ollama.com/install.sh | sh" || echo OLLAMA-SKIP
       systemctl enable --now ollama 2>/dev/null || true
       # Sentinel app (latest .deb) + Nexus CLI
       DEB_URL=$(curl -fsSL https://api.github.com/repos/SpartanKing18/sentinel-web/releases/tags/sentinel | jq -r '.assets[].browser_download_url' | grep -E 'sentinel-app_.*_amd64\.deb' | sort -V | tail -1)
-      if [ -n "$DEB_URL" ]; then curl -fL "$DEB_URL" -o /tmp/sentinel-app.deb; apt-get install -y /tmp/sentinel-app.deb || { dpkg -i /tmp/sentinel-app.deb || true; apt-get -f install -y; }; fi
-      [ -d /opt/sentinel-cli ] || git clone --depth 1 https://github.com/SpartanKing18/sentinel-cli /opt/sentinel-cli
-      ( cd /opt/sentinel-cli && { npm install --omit=dev --no-audit --no-fund || npm install --no-audit --no-fund; }; npm link || ln -sf /opt/sentinel-cli/sentinel.js /usr/local/bin/sentinel )
+      if [ -n "$DEB_URL" ]; then curl -fL --max-time 180 "$DEB_URL" -o /tmp/sentinel-app.deb; apt-get install -y /tmp/sentinel-app.deb || { dpkg -i /tmp/sentinel-app.deb || true; apt-get -f install -y; }; fi
+      [ -d /opt/sentinel-cli ] || timeout 180 git clone --depth 1 https://github.com/SpartanKing18/sentinel-cli /opt/sentinel-cli
+      ( cd /opt/sentinel-cli && { timeout 300 npm install --omit=dev --no-audit --no-fund || timeout 300 npm install --no-audit --no-fund || true; }; npm link || ln -sf /opt/sentinel-cli/sentinel.js /usr/local/bin/sentinel )
       chmod +x /opt/sentinel-cli/sentinel.js || true
       # Sentinel toolkit — adopted-and-improved distro features + unique AI tools
       for s in sentinel-anon sentinel-macspoof sentinel-detonate sentinel-stealth \
