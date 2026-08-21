@@ -22,7 +22,18 @@ write_files:
       [Seat:*]
       autologin-user=sentinel
       autologin-user-timeout=0
-      user-session=xfce
+      user-session=sentinel
+  # A session that guarantees a D-Bus session bus (dbus-run-session) — the minimal
+  # cloud base doesn't export DBUS_SESSION_BUS_ADDRESS into the autologin session,
+  # which otherwise breaks xfce4-session ("unable to load a failsafe session").
+  - path: /usr/share/xsessions/sentinel.desktop
+    content: |
+      [Desktop Entry]
+      Name=Sentinel Desktop
+      Comment=Sentinel XFCE session (guaranteed D-Bus)
+      Exec=dbus-run-session -- startxfce4
+      Type=Application
+      DesktopNames=XFCE
   - path: /etc/motd
     content: |
 
