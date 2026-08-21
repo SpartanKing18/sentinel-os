@@ -78,8 +78,9 @@ if xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids >/dev/null 2>&1; th
     -t int -s "$MENU" -t int -s 17 -t int -s 19 -t int -s 18 -t int -s 23 \
     -t int -s 3 -t int -s 2 -t int -s 4 -t int -s 5 -t int -s 6 \
     -t int -s 8 -t int -s 9 -t int -s 10 -t int -s 11 -t int -s 12 -t int -s 13 -t int -s 14 2>/dev/null
-  # taller bar + dark, translucent, teal-tinted background
-  xfconf-query -c xfce4-panel -p /panels/panel-1/size -n -t int -s 36 2>/dev/null
+  # taller bar + bigger launcher icons + dark, translucent, teal-tinted background
+  xfconf-query -c xfce4-panel -p /panels/panel-1/size -n -t int -s 40 2>/dev/null
+  xfconf-query -c xfce4-panel -p /panels/panel-1/icon-size -n -t int -s 30 2>/dev/null
   xfconf-query -c xfce4-panel -p /panels/panel-1/background-style -n -t int -s 1 2>/dev/null
   xfconf-query -c xfce4-panel -p /panels/panel-1/background-rgba -n -a \
     -t double -s 0.035 -t double -s 0.086 -t double -s 0.110 -t double -s 0.94 2>/dev/null
