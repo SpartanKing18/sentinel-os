@@ -16,9 +16,11 @@ command -v VBoxManage >/dev/null || { echo "VirtualBox (VBoxManage) not found"; 
 
 if ! VBoxManage list vms | grep -q "\"$VM\""; then
   VBoxManage createvm --name "$VM" --ostype Debian_64 --register
-  VBoxManage modifyvm "$VM" --memory 4096 --cpus 2 --vram 128 --graphicscontroller vmsvga --nic1 nat --audio-driver none
-  VBoxManage storagectl "$VM" --name SATA --add sata --controller IntelAhci
-  VBoxManage storageattach "$VM" --storagectl SATA --port 0 --device 0 --type hdd --medium "$(pwd)/$VDI"
+  VBoxManage modifyvm "$VM" --memory 4096 --cpus 2 --vram 128 --graphicscontroller vmsvga --nic1 nat --nictype1 virtio --audio-driver none
+  # virtio-scsi, NOT SATA: the Debian cloud initramfs is virtio-only, so a SATA/AHCI
+  # controller leaves it unable to find the root disk ("Gave up waiting for root").
+  VBoxManage storagectl "$VM" --name VIRTIO --add virtio-scsi
+  VBoxManage storageattach "$VM" --storagectl VIRTIO --port 0 --device 0 --type hdd --medium "$(pwd)/$VDI"
   # cloud-init NoCloud seed (CIDATA) as a DVD so the VM provisions itself on first boot
   VBoxManage storagectl "$VM" --name IDE --add ide
   [ -f "$SEED" ] && VBoxManage storageattach "$VM" --storagectl IDE --port 0 --device 0 --type dvddrive --medium "$(pwd)/$SEED"
