@@ -87,9 +87,14 @@ write_files:
       LOG=/var/log/sentinel-provision.log; exec >>"$LOG" 2>&1
       echo "=== Sentinel provision $(date) ==="
       apt-get remove -y needrestart 2>/dev/null || true
-      # Enable contrib/non-free for broader tool coverage
+      # Enable contrib/non-free (old sources.list AND deb822 debian.sources on Bookworm)
       sed -i 's/ main$/ main contrib non-free non-free-firmware/' /etc/apt/sources.list 2>/dev/null || true
+      sed -i '/^Components:/ s/$/ contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true
       apt-get update -y || true
+      # Generic kernel (has vboxvideo/vboxguest + full HID/SATA drivers) so the VM
+      # works in VirtualBox/VMware, not just virtio-cloud — cursor+graphics need it.
+      apt-get install -y linux-image-amd64 && { apt-get purge -y linux-image-cloud-amd64 2>/dev/null || true; }
+      update-grub 2>/dev/null || true
       echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
       # Our own desktop (XFCE) + tools from Debian — installed one-by-one so a
       # single unavailable package can't abort the batch.
@@ -183,6 +188,11 @@ write_files:
       # cloud-init write_files ran as root and left parts of the home root-owned
       # (esp. ~/.config), which breaks xfconfd -> the XFCE session. Fix ownership.
       chown -R sentinel:sentinel /home/sentinel
+      # MAC-agnostic network so it works in VirtualBox/any hypervisor (the default
+      # cloud netplan pins a MAC), and stop cloud-init from regenerating it.
+      printf 'network:\n  version: 2\n  ethernets:\n    sentinel-any:\n      match:\n        name: "e*"\n      dhcp4: true\n      dhcp6: false\n' > /etc/netplan/50-cloud-init.yaml
+      chmod 600 /etc/netplan/50-cloud-init.yaml
+      echo 'network: {config: disabled}' > /etc/cloud/cloud.cfg.d/99-disable-network.cfg
       touch /var/lib/sentinel-provisioned
       echo "=== provision done $(date) ==="
 
