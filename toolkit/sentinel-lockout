@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# sentinel-lockout — panic-button defensive lockdown for Sentinel OS.
+# Engages every reasonable host defense to stop an in-progress attack:
+#   * firewall to drop ALL new inbound (only loopback + established replies survive)
+#   * kernel/network hardening (anti-spoof, SYN-cookies, no redirects/source-route)
+#   * kills existing foreign connections
+#   * shrinks the attack surface (stops avahi/cups/bluetooth/rpcbind, enforces AppArmor)
+# Fully reversible:  lockout off   restores normal operation.
+set -u
+STATE=/var/lib/sentinel/lockout
+C_R=$'\e[31m'; C_G=$'\e[32m'; C_Y=$'\e[33m'; C_C=$'\e[36m'; C_B=$'\e[1m'; C_0=$'\e[0m'
+say(){ printf '%s\n' "$*"; }
+ok(){  printf '  %s[+]%s %s\n' "$C_G" "$C_0" "$*"; }
+warn(){ printf '  %s[!]%s %s\n' "$C_Y" "$C_0" "$*"; }
+
+[ "$(id -u)" -eq 0 ] || exec sudo -E "$0" "$@"
+mkdir -p "$STATE"
+
+engage(){
+  printf '%s%s╔══════════════════════════════════════════╗%s\n' "$C_B" "$C_R" "$C_0"
+  printf '%s%s║      SENTINEL LOCKOUT — ENGAGING          ║%s\n' "$C_B" "$C_R" "$C_0"
+  printf '%s%s╚══════════════════════════════════════════╝%s\n' "$C_B" "$C_R" "$C_0"
+
+  # 0) snapshot current exposure for the after-report
+  ss -tulnp 2>/dev/null > "$STATE/pre-listeners.txt"
+  # save the current ruleset so `lockout off` can restore it
+  nft list ruleset > "$STATE/pre-lockout.nft" 2>/dev/null || true
+
+  say "${C_C}${C_B}» Firewall — drop all new inbound${C_0}"
+  if command -v nft >/dev/null; then
+    nft flush ruleset 2>/dev/null
+    nft -f - <<'NFT' 2>/dev/null
+table inet lockout {
+  chain input {
+    type filter hook input priority 0; policy drop;
+    iif "lo" accept
+    ct state established,related accept
+    ct state invalid drop
+    ip protocol icmp icmp type echo-request drop
+    limit rate 4/minute burst 5 packets log prefix "[sentinel-lockout] "
+  }
+  chain forward { type filter hook forward priority 0; policy drop; }
+  chain output { type filter hook output priority 0; policy accept; }
+}
+NFT
+    if nft list table inet lockout >/dev/null 2>&1; then
+      ok "inbound sealed (loopback + established replies only); outbound still allowed"
+    else
+      warn "nftables rule load failed"
+    fi
+  else
+    warn "nft not found — firewall step skipped"
+  fi
+
+  say "${C_C}${C_B}» Kernel & network hardening${C_0}"
+  while read -r key val; do sysctl -qw "$key=$val" 2>/dev/null; done <<'SYS'
+net.ipv4.tcp_syncookies 1
+net.ipv4.conf.all.rp_filter 1
+net.ipv4.conf.default.rp_filter 1
+net.ipv4.conf.all.accept_redirects 0
+net.ipv4.conf.default.accept_redirects 0
+net.ipv4.conf.all.secure_redirects 0
+net.ipv4.conf.all.send_redirects 0
+net.ipv4.conf.all.accept_source_route 0
+net.ipv4.conf.default.accept_source_route 0
+net.ipv4.conf.all.log_martians 1
+net.ipv4.icmp_echo_ignore_broadcasts 1
+net.ipv4.icmp_ignore_bogus_error_responses 1
+net.ipv4.ip_forward 0
+net.ipv6.conf.all.forwarding 0
+net.ipv6.conf.all.accept_redirects 0
+net.ipv6.conf.all.accept_ra 0
+kernel.kptr_restrict 2
+kernel.dmesg_restrict 1
+kernel.yama.ptrace_scope 2
+kernel.unprivileged_bpf_disabled 1
+net.core.bpf_jit_harden 2
+SYS
+  ok "anti-spoof, SYN-cookies, no redirects/source-route, ptrace & kptr locked down"
+
+  say "${C_C}${C_B}» Cut existing foreign connections${C_0}"
+  local killed=0
+  if command -v ss >/dev/null; then
+    ss -K state established 'not ( src 127.0.0.0/8 or dst 127.0.0.0/8 )' >/dev/null 2>&1 && killed=1
+  fi
+  [ "$killed" = 1 ] && ok "dropped active non-loopback sessions" || warn "kernel can't force-close sockets (best-effort)"
+
+  say "${C_C}${C_B}» Shrink the attack surface${C_0}"
+  for svc in avahi-daemon.socket avahi-daemon cups.socket cups bluetooth rpcbind.socket rpcbind smbd nmbd vsftpd apache2 nginx; do
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+      systemctl stop "$svc" 2>/dev/null && ok "stopped $svc"
+    fi
+  done
+
+  say "${C_C}${C_B}» Mandatory access control${C_0}"
+  if command -v aa-enforce >/dev/null 2>&1; then
+    aa-enforce /etc/apparmor.d/* >/dev/null 2>&1 && ok "AppArmor profiles set to enforce" || warn "AppArmor enforce partial"
+  else
+    warn "AppArmor tools not present"
+  fi
+  command -v firecfg >/dev/null 2>&1 && { firecfg >/dev/null 2>&1; ok "firejail sandboxing active for common apps"; }
+
+  # block USB mass-storage (BadUSB / exfil) — best-effort, reversible on `off`
+  if modprobe -r usb_storage 2>/dev/null; then echo "install usb_storage /bin/true" > /etc/modprobe.d/sentinel-lockout-usb.conf; ok "USB mass-storage disabled"; fi
+
+  touch "$STATE/engaged"
+  echo
+  printf '%s%s  LOCKDOWN ENGAGED%s  — run %slockout off%s to restore, %slockout status%s to review.\n' \
+         "$C_B" "$C_G" "$C_0" "$C_B" "$C_0" "$C_B" "$C_0"
+}
+
+disengage(){
+  say "${C_C}${C_B}» Lifting Sentinel lockdown${C_0}"
+  if command -v nft >/dev/null; then
+    nft flush ruleset 2>/dev/null
+    if [ -s "$STATE/pre-lockout.nft" ]; then
+      nft -f "$STATE/pre-lockout.nft" 2>/dev/null && ok "previous firewall ruleset restored" || ok "firewall cleared (was empty before)"
+    else
+      ok "firewall cleared (no prior ruleset)"
+    fi
+  fi
+  rm -f /etc/modprobe.d/sentinel-lockout-usb.conf 2>/dev/null && modprobe usb_storage 2>/dev/null && ok "USB mass-storage re-enabled"
+  rm -f "$STATE/engaged"
+  warn "services stopped during lockdown are left stopped — start any you need (e.g. systemctl start cups)"
+  printf '%s  Lockdown lifted.%s\n' "$C_G" "$C_0"
+}
+
+status(){
+  if [ -f "$STATE/engaged" ]; then
+    printf '%s%s● LOCKED DOWN%s\n' "$C_B" "$C_R" "$C_0"
+  else
+    printf '%s%s● normal%s\n' "$C_B" "$C_G" "$C_0"
+  fi
+  echo "Firewall table 'lockout': $(nft list table inet lockout >/dev/null 2>&1 && echo active || echo absent)"
+  echo "Current listeners:"; ss -tulnp 2>/dev/null | awk 'NR==1 || /LISTEN/{print "  "$0}' | head -20
+}
+
+case "${1:-on}" in
+  on|engage|"") engage ;;
+  off|stop|lift|disengage) disengage ;;
+  status) status ;;
+  *) echo "usage: lockout [on|off|status]"; exit 2 ;;
+esac

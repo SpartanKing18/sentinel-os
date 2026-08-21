@@ -147,9 +147,23 @@ write_files:
       # Sentinel toolkit — adopted-and-improved distro features + unique AI tools
       for s in sentinel-anon sentinel-macspoof sentinel-detonate sentinel-stealth \
                sentinel-ask sentinel-triage sentinel-engage sentinel-arsenal \
-               sentinel-tweaks gen-sentinel-menu sentinel-desktop-setup; do
+               sentinel-tweaks sentinel-lockout gen-sentinel-menu sentinel-desktop-setup; do
         curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/$s" -o "/usr/local/bin/$s" && chmod +x "/usr/local/bin/$s" || echo "TOOLKIT-SKIP $s"
       done
+      # `/lockout` shorthand for the defensive lockdown command
+      ln -sf /usr/local/bin/sentinel-lockout /usr/local/bin/lockout
+      # menu entry (non-destructive: shows status + how to engage/restore)
+      cat > /usr/share/applications/sentinel-lockout.desktop <<'LOCK'
+      [Desktop Entry]
+      Type=Application
+      Name=Sentinel Lockout (defense)
+      Comment=Emergency defensive lockdown — seal inbound, harden, cut foreign connections
+      Exec=xfce4-terminal --title="Sentinel Lockout" -e "bash -lc 'sudo lockout status; echo; echo \"Engage:  lockout on     Restore: lockout off\"; exec bash'"
+      Icon=security-high
+      Terminal=false
+      Categories=System;Security;
+      LOCK
+      sed -i 's/^      //' /usr/share/applications/sentinel-lockout.desktop
       command -v firecfg >/dev/null && firecfg >/dev/null 2>&1 || true   # auto-sandbox common apps
       gen-sentinel-menu 2>/dev/null || true
       install -d /usr/share/backgrounds; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-wallpaper.png" -o /usr/share/backgrounds/sentinel-wallpaper.png 2>/dev/null || true
@@ -182,6 +196,16 @@ write_files:
       position = 50%,center 58%,center
       GRE
       sed -i 's/^      //' /etc/lightdm/lightdm-gtk-greeter.conf
+      # VirtualBox Guest Additions — auto-resize the display so fullscreen fills the
+      # screen with NO black bars, plus shared clipboard. Built against the generic
+      # kernel from the Debian GA-ISO package (VBox guest .debs are gone from bookworm).
+      # Harmless under QEMU/KVM — the modules simply stay idle there.
+      apt-get install -y linux-headers-amd64 dkms virtualbox-guest-additions-iso 2>/dev/null || true
+      GAISO=$(ls /usr/share/virtualbox/VBoxGuestAdditions.iso 2>/dev/null | head -1)
+      if [ -n "$GAISO" ]; then
+        mkdir -p /mnt/ga && mount -o loop,ro "$GAISO" /mnt/ga 2>/dev/null && \
+          { sh /mnt/ga/VBoxLinuxAdditions.run --nox11 2>/dev/null || true; umount /mnt/ga 2>/dev/null; }
+      fi
       # Make the image bootable on ANY hypervisor disk controller (VirtualBox
       # SATA/AHCI, VMware) — the Debian cloud initramfs is virtio-only by default.
       sed -i 's/^MODULES=.*/MODULES=most/' /etc/initramfs-tools/initramfs.conf 2>/dev/null || echo "MODULES=most" >> /etc/initramfs-tools/initramfs.conf

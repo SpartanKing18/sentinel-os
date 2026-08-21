@@ -24,13 +24,16 @@ xfconf-query -c xsettings -p /Xft/RGBA      -n -t string -s "rgb" 2>/dev/null
 xfconf-query -c xsettings -p /Xft/DPI       -n -t int    -s 96 2>/dev/null
 xfconf-query -c xsettings -p /Gtk/CursorThemeName -n -t string -s "$CUR" 2>/dev/null
 xfconf-query -c xsettings -p /Gtk/CursorThemeSize -n -t int    -s 24 2>/dev/null
-# window manager: soft shadows for depth + clean right-side buttons
+# window manager: clean right-side buttons. NOTE compositing is intentionally OFF —
+# in a software-rendered VM the compositor is the #1 cause of scroll/cursor/type lag.
 xfconf-query -c xfwm4 -p /general/title_font       -n -t string -s "${UIFONT% *} Bold ${UIFONT##* }" 2>/dev/null
 xfconf-query -c xfwm4 -p /general/button_layout    -s "O|HMC" 2>/dev/null
 xfconf-query -c xfwm4 -p /general/title_alignment  -n -t string -s "center" 2>/dev/null
-xfconf-query -c xfwm4 -p /general/use_compositing  -n -t bool -s true 2>/dev/null
-xfconf-query -c xfwm4 -p /general/show_frame_shadow -n -t bool -s true 2>/dev/null
-xfconf-query -c xfwm4 -p /general/show_popup_shadow -n -t bool -s true 2>/dev/null
+xfconf-query -c xfwm4 -p /general/use_compositing  -n -t bool -s false 2>/dev/null
+xfconf-query -c xfwm4 -p /general/show_frame_shadow -n -t bool -s false 2>/dev/null
+xfconf-query -c xfwm4 -p /general/show_popup_shadow -n -t bool -s false 2>/dev/null
+xfconf-query -c xfwm4 -p /general/box_move         -n -t bool -s true 2>/dev/null
+xfconf-query -c xfwm4 -p /general/box_resize       -n -t bool -s true 2>/dev/null
 
 # --- professional dark terminal (JetBrains Mono, teal-accent palette) ---
 mkdir -p "$HOME/.config/xfce4/terminal"
