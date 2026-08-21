@@ -109,6 +109,7 @@ write_files:
         tor nftables firejail firejail-profiles apparmor apparmor-utils macchanger \
         proxychains4 torsocks keepassxc gnupg whiptail desktop-file-utils \
         xdotool wmctrl libimage-exiftool-perl arc-theme papirus-icon-theme \
+        fonts-inter fonts-jetbrains-mono dmz-cursor-theme xfce4-notifyd kbd \
         docker.io docker-compose-plugin"
       for p in $PKGS; do apt-get install -y "$p" || echo "SKIP $p"; done
       usermod -aG docker sentinel 2>/dev/null || true
@@ -156,6 +157,23 @@ write_files:
       install -d /usr/share/backgrounds; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-wallpaper.png" -o /usr/share/backgrounds/sentinel-wallpaper.png 2>/dev/null || true
       install -d /usr/share/pixmaps; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/google-icon.png" -o /usr/share/pixmaps/sentinel-google.png 2>/dev/null || true
       curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-menu.png" -o /usr/share/pixmaps/sentinel-menu.png 2>/dev/null || true
+      # branded LightDM login screen (dark, Sentinel wallpaper, teal accent)
+      cat > /etc/lightdm/lightdm-gtk-greeter.conf <<'GRE'
+      [greeter]
+      theme-name = Arc-Dark
+      icon-theme-name = Papirus-Dark
+      font-name = Inter 11
+      cursor-theme-name = DMZ-White
+      cursor-theme-size = 24
+      background = /usr/share/backgrounds/sentinel-wallpaper.png
+      xft-antialias = true
+      xft-hintstyle = hintslight
+      xft-rgba = rgb
+      indicators = ~host;~spacer;~clock;~spacer;~session;~power
+      clock-format = %A  %d %B    %H:%M
+      position = 50%,center 58%,center
+      GRE
+      sed -i 's/^      //' /etc/lightdm/lightdm-gtk-greeter.conf
       # Make the image bootable on ANY hypervisor disk controller (VirtualBox
       # SATA/AHCI, VMware) — the Debian cloud initramfs is virtio-only by default.
       sed -i 's/^MODULES=.*/MODULES=most/' /etc/initramfs-tools/initramfs.conf 2>/dev/null || echo "MODULES=most" >> /etc/initramfs-tools/initramfs.conf

@@ -10,6 +10,71 @@ IC=Adwaita;      [ -d /usr/share/icons/Papirus-Dark ] && IC=Papirus-Dark
 xfconf-query -c xsettings -p /Net/ThemeName     -n -t string -s "$TH" 2>/dev/null
 xfconf-query -c xfwm4     -p /general/theme      -n -t string -s "$TH" 2>/dev/null
 xfconf-query -c xsettings -p /Net/IconThemeName -n -t string -s "$IC" 2>/dev/null
+
+# --- professional polish: crisp fonts, modern cursor, window depth ---
+UIFONT="DejaVu Sans 10"; fc-list 2>/dev/null | grep -qi "Inter"     && UIFONT="Inter 10"
+MONO="DejaVu Sans Mono 10"; fc-list 2>/dev/null | grep -qi "JetBrains" && MONO="JetBrains Mono 10"
+CUR=Adwaita; [ -d /usr/share/icons/DMZ-White ] && CUR=DMZ-White
+xfconf-query -c xsettings -p /Gtk/FontName          -n -t string -s "$UIFONT" 2>/dev/null
+xfconf-query -c xsettings -p /Gtk/MonospaceFontName -n -t string -s "$MONO" 2>/dev/null
+xfconf-query -c xsettings -p /Xft/Antialias -n -t int    -s 1 2>/dev/null
+xfconf-query -c xsettings -p /Xft/Hinting   -n -t int    -s 1 2>/dev/null
+xfconf-query -c xsettings -p /Xft/HintStyle -n -t string -s "hintslight" 2>/dev/null
+xfconf-query -c xsettings -p /Xft/RGBA      -n -t string -s "rgb" 2>/dev/null
+xfconf-query -c xsettings -p /Xft/DPI       -n -t int    -s 96 2>/dev/null
+xfconf-query -c xsettings -p /Gtk/CursorThemeName -n -t string -s "$CUR" 2>/dev/null
+xfconf-query -c xsettings -p /Gtk/CursorThemeSize -n -t int    -s 24 2>/dev/null
+# window manager: soft shadows for depth + clean right-side buttons
+xfconf-query -c xfwm4 -p /general/title_font       -n -t string -s "${UIFONT% *} Bold ${UIFONT##* }" 2>/dev/null
+xfconf-query -c xfwm4 -p /general/button_layout    -s "O|HMC" 2>/dev/null
+xfconf-query -c xfwm4 -p /general/title_alignment  -n -t string -s "center" 2>/dev/null
+xfconf-query -c xfwm4 -p /general/use_compositing  -n -t bool -s true 2>/dev/null
+xfconf-query -c xfwm4 -p /general/show_frame_shadow -n -t bool -s true 2>/dev/null
+xfconf-query -c xfwm4 -p /general/show_popup_shadow -n -t bool -s true 2>/dev/null
+
+# --- professional dark terminal (JetBrains Mono, teal-accent palette) ---
+mkdir -p "$HOME/.config/xfce4/terminal"
+cat > "$HOME/.config/xfce4/terminal/terminalrc" <<'RC'
+[Configuration]
+FontName=JetBrains Mono 11
+MiscMenubarDefault=FALSE
+MiscToolbarDefault=FALSE
+MiscBordersDefault=TRUE
+MiscDefaultGeometry=110x30
+MiscConfirmClose=TRUE
+MiscHighlightUrls=TRUE
+MiscCursorShape=TERMINAL_CURSOR_SHAPE_BLOCK
+ScrollingBar=TERMINAL_SCROLLBAR_NONE
+ScrollingUnlimited=TRUE
+BackgroundMode=TERMINAL_BACKGROUND_TRANSPARENT
+BackgroundDarkness=0.970000
+ColorForeground=#c9d1d9
+ColorBackground=#0d1117
+ColorCursor=#1ce0d0
+ColorCursorForeground=#0d1117
+ColorBold=#f0f6fc
+ColorBoldUseDefault=FALSE
+ColorSelection=#1ce0d0
+ColorSelectionUseDefault=FALSE
+ColorSelectionBackground=#193b3a
+TabActivityColor=#1ce0d0
+ColorPalette=#484f58;#ff7b72;#3fb950;#d29922;#58a6ff;#bc8cff;#39c5cf;#b1bac4;#6e7681;#ffa198;#56d364;#e3b341;#79c0ff;#d2a8ff;#56d4dd;#f0f6fc
+RC
+
+# --- disable the disruptive idle screen-lock (light-locker spawns a separate
+#     greeter on another VT); keep manual lock available via the menu ---
+mkdir -p "$HOME/.config/autostart"
+cat > "$HOME/.config/autostart/light-locker.desktop" <<'D'
+[Desktop Entry]
+Type=Application
+Name=Screen Locker
+Exec=light-locker
+Hidden=true
+X-GNOME-Autostart-enabled=false
+D
+xfconf-query -c xfce4-screensaver -p /saver/enabled -n -t bool -s false 2>/dev/null || true
+xfconf-query -c xfce4-screensaver -p /lock/enabled  -n -t bool -s false 2>/dev/null || true
+
 # wallpaper on all existing backdrop props + monitor0/Virtual-1 fallbacks
 if [ -f "$WALL" ]; then
   while read -r p; do [ -n "$p" ] && xfconf-query -c xfce4-desktop -p "$p" -s "$WALL" 2>/dev/null; done < <(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E 'last-image$')
@@ -84,6 +149,9 @@ if xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids >/dev/null 2>&1; th
   xfconf-query -c xfce4-panel -p /panels/panel-1/background-style -n -t int -s 1 2>/dev/null
   xfconf-query -c xfce4-panel -p /panels/panel-1/background-rgba -n -a \
     -t double -s 0.035 -t double -s 0.086 -t double -s 0.110 -t double -s 0.94 2>/dev/null
+  # clean clock (date + 24h time)
+  xfconf-query -c xfce4-panel -p /plugins/plugin-12/digital-time-format -n -t string -s "%H:%M" 2>/dev/null || true
+  xfconf-query -c xfce4-panel -p /plugins/plugin-12/digital-date-format -n -t string -s "%a %d %b" 2>/dev/null || true
   # collapse to a single top panel (drop the bottom dock)
   xfconf-query -c xfce4-panel -p /panels -a -t int -s 1 2>/dev/null
   xfce4-panel -r 2>/dev/null || true
