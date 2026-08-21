@@ -171,6 +171,9 @@ write_files:
       D
       chown sentinel:sentinel /home/sentinel/Desktop/*.desktop 2>/dev/null || true
       chmod +x /home/sentinel/Desktop/*.desktop 2>/dev/null || true
+      # cloud-init write_files ran as root and left parts of the home root-owned
+      # (esp. ~/.config), which breaks xfconfd -> the XFCE session. Fix ownership.
+      chown -R sentinel:sentinel /home/sentinel
       touch /var/lib/sentinel-provisioned
       echo "=== provision done $(date) ==="
 
