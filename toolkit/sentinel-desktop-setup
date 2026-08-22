@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # First-login desktop branding for Sentinel OS — wallpaper + dark theme. Self-removes.
 set -u
-# default wallpaper: first of the Sentinel set if present, else the legacy single image
-WALL=/usr/share/backgrounds/sentinel/01-aurora.png
+# default wallpaper: the classic Sentinel splash from the set, else the legacy copy.
+# (The set has 50 more — switch with `sentinel-wallpaper set <n>` / `cycle`.)
+WALL=/usr/share/backgrounds/sentinel/00-classic.png
 [ -f "$WALL" ] || WALL=/usr/share/backgrounds/sentinel-wallpaper.png
 for i in $(seq 1 20); do xfconf-query -c xfce4-desktop -l >/dev/null 2>&1 && break; sleep 1; done
 # dark theme — pick the best that is ACTUALLY installed (a missing theme name
