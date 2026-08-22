@@ -34,6 +34,11 @@ xfconf-query -c xfwm4 -p /general/show_frame_shadow -n -t bool -s false 2>/dev/n
 xfconf-query -c xfwm4 -p /general/show_popup_shadow -n -t bool -s false 2>/dev/null
 xfconf-query -c xfwm4 -p /general/box_move         -n -t bool -s true 2>/dev/null
 xfconf-query -c xfwm4 -p /general/box_resize       -n -t bool -s true 2>/dev/null
+xfconf-query -c xfwm4 -p /general/focus_delay      -n -t int  -s 0 2>/dev/null
+# smoothness: no GTK animations / event sounds / on-the-fly thumbnailing in a VM
+xfconf-query -c xsettings -p /Gtk/EnableAnimations -n -t bool -s false 2>/dev/null
+xfconf-query -c xsettings -p /Net/EnableEventSounds -n -t bool -s false 2>/dev/null
+xfconf-query -c thunar    -p /misc-thumbnail-mode  -n -t string -s "THUNAR_THUMBNAIL_MODE_NEVER" 2>/dev/null
 
 # --- professional dark terminal (JetBrains Mono, teal-accent palette) ---
 mkdir -p "$HOME/.config/xfce4/terminal"

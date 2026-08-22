@@ -85,13 +85,32 @@ write_files:
       LOG=/var/log/sentinel-provision.log; exec >>"$LOG" 2>&1
       echo "=== Sentinel provision $(date) ==="
       apt-get remove -y needrestart 2>/dev/null || true
-      # Enable contrib/non-free (old sources.list AND deb822 debian.sources on Bookworm)
-      sed -i 's/ main$/ main contrib non-free non-free-firmware/' /etc/apt/sources.list 2>/dev/null || true
-      sed -i '/^Components:/ s/$/ contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true
+      # Which base are we wearing? build.sh stamps the family; fall back to os-release
+      # so this works whatever apt distro (Debian / Ubuntu / Kali) it lands on.
+      FAMILY="@@SENTINEL_FAMILY@@"
+      case "$FAMILY" in debian|ubuntu) : ;; *)
+        . /etc/os-release 2>/dev/null || true
+        case "${ID:-debian} ${ID_LIKE:-}" in *ubuntu*) FAMILY=ubuntu;; *) FAMILY=debian;; esac ;;
+      esac
+      echo "== Sentinel base family: $FAMILY (${PRETTY_NAME:-unknown}) =="
+      if [ "$FAMILY" = ubuntu ]; then
+        # Ubuntu: make sure universe/multiverse are on (most tools live there)
+        (command -v add-apt-repository >/dev/null && add-apt-repository -y universe multiverse) 2>/dev/null || \
+          sed -i 's/^Components: .*/Components: main restricted universe multiverse/' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+      else
+        # Debian/Kali: enable contrib/non-free (old sources.list AND deb822 debian.sources)
+        sed -i 's/ main$/ main contrib non-free non-free-firmware/' /etc/apt/sources.list 2>/dev/null || true
+        sed -i '/^Components:/ s/$/ contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true
+      fi
       apt-get update -y || true
-      # Generic kernel (has vboxvideo/vboxguest + full HID/SATA drivers) so the VM
-      # works in VirtualBox/VMware, not just virtio-cloud — cursor+graphics need it.
-      apt-get install -y linux-image-amd64 && { apt-get purge -y linux-image-cloud-amd64 2>/dev/null || true; }
+      # Full generic kernel (has vboxvideo/vboxguest + HID/SATA drivers) so the VM works
+      # in VirtualBox/VMware, not just virtio-cloud — cursor + graphics need it. The
+      # package name differs per distro; the cloud/minimal kernel is then removed.
+      if [ "$FAMILY" = ubuntu ]; then
+        apt-get install -y linux-generic && { apt-get purge -y linux-image-kvm linux-kvm 2>/dev/null || true; }
+      else
+        apt-get install -y linux-image-amd64 && { apt-get purge -y linux-image-cloud-amd64 2>/dev/null || true; }
+      fi
       update-grub 2>/dev/null || true
       echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
       # Our own desktop (XFCE) + tools from Debian — installed one-by-one so a
