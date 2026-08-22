@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# sentinel-ai — the shared AI engine every Sentinel tool speaks to.
+# Local by default (Ollama), cloud automatically if a key is present. Streams.
+#
+#   sentinel-ai "explain this nmap output"           # prompt as args
+#   cat scan.txt | sentinel-ai "summarise findings"  # + piped context
+#   sentinel-ai -s "you are X" -q "one-shot, no stream"
+#
+# Env:  SENTINEL_AI_ENGINE=ollama|claude|api   (auto: cloud if a key is set, else ollama)
+#       SENTINEL_MODEL=...   ANTHROPIC_API_KEY / SENTINEL_AI_KEY   SENTINEL_AI_BASE=...
+set -uo pipefail
+SYS="You are Sentinel, an expert offensive-security assistant on a Debian pentest workstation. Be precise, concrete and safe. Assume the operator is authorized to test the systems discussed."
+STREAM=1
+while getopts "s:q" o; do case "$o" in s) SYS="$OPTARG";; q) STREAM=0;; esac; done
+shift $((OPTIND-1))
+PROMPT="$*"
+# fold any piped context into the prompt
+if [ ! -t 0 ]; then CTX="$(cat)"; [ -n "$CTX" ] && PROMPT="${PROMPT}
+
+--- context ---
+${CTX}"; fi
+[ -n "${PROMPT// }" ] || { echo "usage: sentinel-ai [-s system] [-q] <prompt>   (or pipe context in)" >&2; exit 1; }
+
+KEY="${ANTHROPIC_API_KEY:-${SENTINEL_AI_KEY:-}}"
+ENGINE="${SENTINEL_AI_ENGINE:-}"
+[ -n "$ENGINE" ] || { [ -n "$KEY" ] && ENGINE=claude || ENGINE=ollama; }
+
+case "$ENGINE" in
+  claude)
+    MODEL="${SENTINEL_MODEL:-claude-3-5-sonnet-latest}"
+    curl -s https://api.anthropic.com/v1/messages \
+      -H "x-api-key: $KEY" -H "anthropic-version: 2023-06-01" -H "content-type: application/json" \
+      -d "$(jq -nc --arg m "$MODEL" --arg s "$SYS" --arg p "$PROMPT" \
+            '{model:$m,max_tokens:1800,system:$s,messages:[{role:"user",content:$p}]}')" \
+      | jq -r '.content[0].text // .error.message // "AI error"'
+    ;;
+  api)
+    MODEL="${SENTINEL_MODEL:-gpt-4o-mini}"; BASE="${SENTINEL_AI_BASE:-https://api.openai.com/v1}"
+    curl -s "$BASE/chat/completions" -H "Authorization: Bearer $KEY" -H "content-type: application/json" \
+      -d "$(jq -nc --arg m "$MODEL" --arg s "$SYS" --arg p "$PROMPT" \
+            '{model:$m,messages:[{role:"system",content:$s},{role:"user",content:$p}]}')" \
+      | jq -r '.choices[0].message.content // .error.message // "AI error"'
+    ;;
+  *)  # local Ollama (default, private, no cloud)
+    MODEL="${SENTINEL_MODEL:-llama3.2:3b}"
+    command -v ollama >/dev/null || { echo "[sentinel-ai] ollama not installed" >&2; exit 1; }
+    pgrep -x ollama >/dev/null || (nohup ollama serve >/dev/null 2>&1 &)
+    for _ in $(seq 1 15); do curl -sf http://127.0.0.1:11434/api/tags >/dev/null 2>&1 && break; sleep 1; done
+    ollama list 2>/dev/null | grep -qi "${MODEL%%:*}" || { echo "[sentinel-ai] pulling $MODEL (one-time)…" >&2; ollama pull "$MODEL" >/dev/null 2>&1; }
+    body(){ jq -nc --arg m "$MODEL" --arg s "$SYS" --arg p "$PROMPT" --argjson st "$1" '{model:$m,system:$s,prompt:$p,stream:($st==1)}'; }
+    if [ "$STREAM" = 1 ]; then
+      curl -sN http://127.0.0.1:11434/api/generate -d "$(body 1)" \
+        | while IFS= read -r line; do printf '%s' "$(printf '%s' "$line" | jq -j '.response // empty' 2>/dev/null)"; done
+      echo
+    else
+      curl -s http://127.0.0.1:11434/api/generate -d "$(body 0)" | jq -r '.response // "AI error"'
+    fi
+    ;;
+esac

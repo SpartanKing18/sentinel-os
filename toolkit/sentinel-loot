@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# sentinel-loot — turn a pile of raw tool output into a prioritised findings register.
+# Point it at a file/dir (or pipe output in); the AI distils a ranked Markdown table.
+#
+#   sentinel-loot ~/engagements/target-*/         # a whole engagement
+#   nmap -sV host | sentinel-loot                 # straight off a pipe
+#   sentinel-loot scan.txt nuclei.txt             # specific files
+set -uo pipefail
+DATA=""
+if [ "$#" -gt 0 ]; then
+  for s in "$@"; do [ -e "$s" ] && DATA+="$(find "$s" -type f -exec cat {} + 2>/dev/null)"$'\n'; done
+elif [ ! -t 0 ]; then
+  DATA="$(cat)"
+fi
+[ -n "${DATA// }" ] || { echo "usage: sentinel-loot <file|dir ...>   (or pipe scan output in)" >&2; exit 1; }
+
+printf '%s' "$DATA" | head -c 14000 | sentinel-ai -s "You are a pentest lead triaging raw tool output into a findings register. Be exact; never invent findings that aren't in the data." \
+  "Extract every concrete finding from the tool output below into a Markdown table:
+| Asset | Service / Version | Finding | Risk (Crit/High/Med/Low) | Evidence | Recommended action |
+Then, under a '## Attack first' heading, list the 3 highest-value items to pursue and why."

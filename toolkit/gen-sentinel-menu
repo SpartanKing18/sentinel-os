@@ -32,10 +32,43 @@ Categories=X-Sentinel-$c;
 A
   done
 done
+
+# Sentinel's own AI-powered & ops tools (open a terminal ready to use them)
+declare -A NATIVE=(
+ [sentinel-recon]="AI recon + prioritised next steps"
+ [sentinel-triage]="fast AI target triage"
+ [sentinel-engage]="engagement workspace + AI report"
+ [sentinel-loot]="AI findings register from scan output"
+ [sentinel-ask]="natural-language to command"
+ [sentinel-scope]="authorization / in-scope guard"
+ [sentinel-anon]="Tor anonymity + kill-switch"
+ [sentinel-stealth]="stealth profile"
+ [sentinel-lockout]="defensive lockdown"
+ [sentinel-tweaks]="control center"
+)
+mkdir -p "$DIRS"
+cat > "$DIRS/sentinel-ai.directory" <<D
+[Desktop Entry]
+Type=Directory
+Name=Sentinel AI & Ops
+Icon=applications-system
+D
+for t in "${!NATIVE[@]}"; do command -v "$t" >/dev/null || continue
+  cat > "$APPS/$t.desktop" <<A
+[Desktop Entry]
+Type=Application
+Name=${t#sentinel-}
+Comment=${NATIVE[$t]}
+Exec=xfce4-terminal --title=$t -e "bash -lc '$t; echo; exec bash'"
+Terminal=false
+Categories=X-Sentinel-AI;
+A
+done
 cat > /etc/xdg/menus/applications-merged/sentinel.menu <<'M'
 <!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN" "http://www.freedesktop.org/standards/menu-spec/menu-1.0.dtd">
 <Menu><Name>Applications</Name><Menu><Name>Sentinel</Name><Directory>sentinel.directory</Directory>
 M
+printf '<Menu><Name>AI &amp; Ops</Name><Directory>sentinel-ai.directory</Directory><Include><Category>X-Sentinel-AI</Category></Include></Menu>\n' >> /etc/xdg/menus/applications-merged/sentinel.menu
 for c in "${!CAT[@]}"; do printf '<Menu><Name>%s</Name><Directory>sentinel-%s.directory</Directory><Include><Category>X-Sentinel-%s</Category></Include></Menu>\n' "$c" "${c,,}" "$c" >> /etc/xdg/menus/applications-merged/sentinel.menu; done
 echo '</Menu></Menu>' >> /etc/xdg/menus/applications-merged/sentinel.menu
 cat > "$DIRS/sentinel.directory" <<D

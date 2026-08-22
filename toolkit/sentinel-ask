@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
-# Natural-language tool launcher: describe intent, get + run the command. Local LLM.
+# Natural-language → shell command, then optionally run it. Uses the Sentinel AI engine.
 set -uo pipefail
 Q="$*"; [ -n "$Q" ] || read -rp "What do you want to do? " Q
-MODEL="${SENTINEL_MODEL:-llama3.2:3b}"
-pgrep -x ollama >/dev/null || (nohup ollama serve >/dev/null 2>&1 &) ; sleep 1
-ollama list 2>/dev/null | grep -qi "${MODEL%%:*}" || { echo "[*] pulling $MODEL (one-time)…"; ollama pull "$MODEL" >/dev/null 2>&1; }
-P="You are a Linux pentest assistant on Debian with security tools installed. Convert the request into ONE safe shell command. Output ONLY the command — no prose, no backticks. Request: $Q"
-CMD="$(curl -s http://127.0.0.1:11434/api/generate -d "$(jq -nc --arg m "$MODEL" --arg p "$P" '{model:$m,prompt:$p,stream:false}')" | jq -r '.response' | grep -m1 . | sed 's/^`*//;s/`*$//')"
-[ -n "$CMD" ] && [ "$CMD" != null ] || { echo "no suggestion"; exit 1; }
+CMD="$(sentinel-ai -q -s 'Convert the request into ONE safe shell command for a Debian pentest box. Output ONLY the command — no prose, no backticks, no explanation.' "$Q" | grep -m1 . | sed 's/^`*//;s/`*$//')"
+[ -n "$CMD" ] && [ "$CMD" != "null" ] || { echo "no suggestion"; exit 1; }
 echo "» $CMD"; read -rp "Run it? [y/N] " a; [ "$a" = y ] && eval "$CMD"

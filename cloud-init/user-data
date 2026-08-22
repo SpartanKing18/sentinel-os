@@ -145,7 +145,8 @@ write_files:
       ( cd /opt/sentinel-cli && { timeout 300 npm install --omit=dev --no-audit --no-fund || timeout 300 npm install --no-audit --no-fund || true; }; npm link || ln -sf /opt/sentinel-cli/sentinel.js /usr/local/bin/sentinel )
       chmod +x /opt/sentinel-cli/sentinel.js || true
       # Sentinel toolkit — adopted-and-improved distro features + unique AI tools
-      for s in sentinel-anon sentinel-macspoof sentinel-detonate sentinel-stealth \
+      for s in sentinel-ai sentinel-scope sentinel-recon sentinel-loot \
+               sentinel-anon sentinel-macspoof sentinel-detonate sentinel-stealth \
                sentinel-ask sentinel-triage sentinel-engage sentinel-arsenal \
                sentinel-tweaks sentinel-lockout gen-sentinel-menu sentinel-desktop-setup; do
         curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/$s" -o "/usr/local/bin/$s" && chmod +x "/usr/local/bin/$s" || echo "TOOLKIT-SKIP $s"

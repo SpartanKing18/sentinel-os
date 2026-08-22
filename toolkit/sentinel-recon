@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# sentinel-recon — one command: a scoped recon chain, then AI-prioritised findings + next steps.
+# Chains DNS/WHOIS/nmap/whatweb/TLS into a workspace and hands the whole picture to the AI.
+set -uo pipefail
+T="${1:-}"; [ -n "$T" ] || { echo "usage: sentinel-recon <ip|domain>"; exit 1; }
+# authorization guard — refuse out-of-scope targets
+command -v sentinel-scope >/dev/null && { sentinel-scope guard "$T" || exit 3; }
+
+DIR="$HOME/engagements/${T//[^A-Za-z0-9._-]/_}-$(date -u +%Y%m%d-%H%M%S)"; mkdir -p "$DIR"
+LOG="$DIR/recon.txt"; echo "### Sentinel recon — $T — $(date -u)" > "$LOG"
+echo "[*] Sentinel recon → $T"
+step(){ local label="$1"; shift; echo "  → $label"; { echo; echo "== $label =="; "$@"; } >> "$LOG" 2>&1 || true; }
+
+command -v dig     >/dev/null && step "DNS"     dig +short "$T" ANY
+command -v host    >/dev/null && step "reverse" host "$T"
+command -v whois   >/dev/null && step "WHOIS"   whois "$T"
+step "nmap (top 200, versions)" nmap -Pn -T4 --top-ports 200 -sV "$T"
+command -v whatweb >/dev/null && step "whatweb" whatweb -a1 "$T"
+command -v openssl >/dev/null && step "TLS cert" bash -c "echo | timeout 8 openssl s_client -connect '$T:443' -servername '$T' 2>/dev/null | openssl x509 -noout -subject -issuer -dates"
+
+echo; echo "===== Sentinel AI analysis ====="
+head -c 9000 "$LOG" | sentinel-ai -s "You are a senior penetration tester analysing recon output. Prioritise ruthlessly and give runnable commands." \
+  "Target: $T. From the recon below produce, in Markdown:
+1. A table of open services + versions.
+2. The most promising attack surface (2-3 lines).
+3. The top 5 next actions, each with an EXACT command to run.
+4. Likely CVEs / known-exploit angles worth checking.
+Keep it tight and practical." | tee "$DIR/analysis.md"
+echo; echo "[+] analysis: $DIR/analysis.md   raw: $LOG"

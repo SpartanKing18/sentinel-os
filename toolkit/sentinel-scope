@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# sentinel-scope — engagement authorization guard. Define your in-scope targets once;
+# Sentinel's offensive tools refuse to touch anything outside them. Unique to Sentinel OS:
+# it turns "only test what you're authorized to" from a sticky-note into an enforced rule.
+#
+#   sentinel-scope add 10.0.0.0/24 target.example.com   # authorize
+#   sentinel-scope list | rm <t> | clear
+#   sentinel-scope check <target>                       # is it allowed?
+#   sentinel-scope guard  <target>                      # exit 0 in-scope / 3 out  (used by tools)
+set -uo pipefail
+CFG="${SENTINEL_SCOPE:-$HOME/.config/sentinel/scope}"; mkdir -p "$(dirname "$CFG")"; touch "$CFG"
+cmd="${1:-list}"; [ $# -gt 0 ] && shift
+
+in_scope(){ # 0 = target ($1) matches an entry in $CFG (exact host, domain suffix, or CIDR)
+  python3 - "$1" "$CFG" <<'PY'
+import sys, ipaddress
+t = sys.argv[1].strip().lower()
+try: lines = open(sys.argv[2]).read().splitlines()
+except Exception: lines = []
+def match(t, e):
+    e = e.strip().lower()
+    if not e or e.startswith('#'): return False
+    if t == e or t.endswith('.' + e): return True
+    try:
+        return ipaddress.ip_address(t) in ipaddress.ip_network(e, strict=False)
+    except Exception:
+        return False
+sys.exit(0 if any(match(t, e) for e in lines) else 1)
+PY
+}
+
+case "$cmd" in
+  add)   for t in "$@"; do grep -qxF "$t" "$CFG" 2>/dev/null || echo "$t" >> "$CFG"; echo "[+] in scope: $t"; done ;;
+  rm|del) for t in "$@"; do grep -vxF "$t" "$CFG" > "$CFG.tmp" 2>/dev/null && mv "$CFG.tmp" "$CFG"; echo "[-] removed: $t"; done ;;
+  clear) : > "$CFG"; echo "[*] scope cleared" ;;
+  list)  echo "# Sentinel engagement scope — $CFG"
+         if [ -s "$CFG" ]; then grep -vE '^\s*$' "$CFG"; else echo "(empty — add targets:  sentinel-scope add 10.0.0.0/24 example.com)"; fi ;;
+  check) t="${1:?usage: sentinel-scope check <target>}"
+         if in_scope "$t"; then echo "IN SCOPE:  $t"; else echo "OUT OF SCOPE:  $t"; exit 3; fi ;;
+  guard) t="${1:?usage: sentinel-scope guard <target>}"
+         if [ ! -s "$CFG" ]; then
+           echo "[sentinel-scope] no scope defined — allowing (set one with: sentinel-scope add <target>)" >&2; exit 0
+         elif in_scope "$t"; then exit 0
+         else echo "[sentinel-scope] REFUSED — $t is out of scope. Authorize it:  sentinel-scope add $t" >&2; exit 3; fi ;;
+  *) echo "usage: sentinel-scope {add|rm|list|clear|check|guard} [targets...]"; exit 2 ;;
+esac
