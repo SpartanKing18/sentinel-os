@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# sentinel-watch — monitor an authorized target's attack surface for CHANGES over time:
+# new/removed subdomains (cert transparency) and open ports. Snapshots + diffs each run.
+# Unique to Sentinel: recon is usually one-shot; this catches drift (a new subdomain or a
+# freshly-opened port is often the way in). Passive by default; --once for a single check.
+#   sentinel-watch <domain|ip>            # loop every hour (SENTINEL_WATCH_INTERVAL to change)
+#   sentinel-watch <domain|ip> --once     # one check and exit (good for cron)
+set -uo pipefail
+T="${1:-}"; [ -n "$T" ] || { echo "usage: sentinel-watch <domain|ip> [--once]"; exit 1; }
+T="${T#*://}"; T="${T%%/*}"
+command -v sentinel-scope >/dev/null && { sentinel-scope guard "$T" || exit 3; }
+DIR="$HOME/.sentinel/watch/${T//[^A-Za-z0-9._-]/_}"; mkdir -p "$DIR"
+c(){ printf '\e[1;36m%s\e[0m\n' "$*"; }; add(){ printf '\e[32m%s\e[0m\n' "$*"; }; rem(){ printf '\e[33m%s\e[0m\n' "$*"; }
+
+snapshot(){
+  # subdomains via crt.sh (split multi-SAN, dedup)
+  curl -fsS --max-time 25 "https://crt.sh/?q=%25.$T&output=json" 2>/dev/null \
+    | tr ',{}[]' '\n' | grep -oE '"(common_name|name_value)":"[^"]+"' | cut -d'"' -f4 \
+    | sed 's/\\n/\n/g' | tr 'A-Z' 'a-z' | sed 's/\*\.//' | grep -E "\.?${T//./\\.}\$" | sort -u > "$DIR/subs.new"
+  # open ports (top 100) — passive-ish quick check
+  if command -v nmap >/dev/null; then
+    nmap -Pn -T4 --top-ports 100 "$T" 2>/dev/null | grep -E '^[0-9]+/tcp .*open' | awk '{print $1}' | sort > "$DIR/ports.new"
+  else : > "$DIR/ports.new"; fi
+}
+diff_key(){ # $1=key label $2=noun
+  local k="$1" n="$2"
+  if [ -f "$DIR/$k.old" ]; then
+    local a r; a="$(comm -13 "$DIR/$k.old" "$DIR/$k.new" 2>/dev/null | grep -v '^$' || true)"
+    r="$(comm -23 "$DIR/$k.old" "$DIR/$k.new" 2>/dev/null | grep -v '^$' || true)"
+    [ -n "$a" ] && { add "  [+] new $n:"; printf '%s\n' "$a" | sed 's/^/      + /'; }
+    [ -n "$r" ] && { rem "  [-] gone $n:"; printf '%s\n' "$r" | sed 's/^/      - /'; }
+    [ -z "$a$r" ] && echo "  = $n unchanged ($(grep -c . "$DIR/$k.new") tracked)"
+  else echo "  * baseline $n: $(grep -c . "$DIR/$k.new") tracked"; fi
+  mv -f "$DIR/$k.new" "$DIR/$k.old"
+}
+check(){ c "== sentinel-watch $T · $(date -u +%Y-%m-%d\ %H:%M)Z =="; snapshot; diff_key subs subdomains; diff_key ports "open ports"; }
+
+if [ "${2:-}" = "--once" ]; then check; exit 0; fi
+INT="${SENTINEL_WATCH_INTERVAL:-3600}"
+echo "watching $T every ${INT}s — Ctrl-C to stop  (state: $DIR)"
+while :; do check; echo; sleep "$INT"; done

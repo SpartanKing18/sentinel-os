@@ -199,4 +199,28 @@ if command -v gio >/dev/null 2>&1; then
   done
 fi
 
+# --- keyboard shortcuts: Super = menu, F12 = Quake-style drop-down terminal, etc. ---
+ks(){ xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/$1" -n -t string -s "$2" 2>/dev/null || \
+      xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/$1" -t string -s "$2" 2>/dev/null; }
+ks "Super_L"            "xfce4-popup-whiskermenu"
+ks "F12"               "xfce4-terminal --drop-down"
+ks "<Primary><Alt>t"   "xfce4-terminal"
+ks "<Super>e"          "thunar"
+ks "<Super>b"          "google-chrome-stable"
+ks "<Primary><Alt>l"   "xflock4"
+# drop-down terminal: sensible size (half-height, full-width, drops from the top)
+mkdir -p "$HOME/.config/xfce4/terminal"
+DR="$HOME/.config/xfce4/terminal/terminalrc"
+grep -q "DropdownHeight" "$DR" 2>/dev/null || cat >> "$DR" <<'DROP'
+MiscDefaultGeometry=104x28
+DropdownHeight=48
+DropdownWidth=100
+DropdownPosition=0
+DropdownOpacity=96
+DropdownAnimationTime=120
+DropdownKeepOpenDefault=FALSE
+DropdownKeepAbove=TRUE
+DropdownShowborders=FALSE
+DROP
+
 rm -f "$HOME/.config/autostart/sentinel-desktop-setup.desktop"

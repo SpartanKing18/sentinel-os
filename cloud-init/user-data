@@ -174,6 +174,7 @@ write_files:
       # Sentinel toolkit — adopted-and-improved distro features + unique AI tools
       for s in sentinel-ai sentinel-scope sentinel-recon sentinel-loot \
                sentinel-harvest sentinel-agent sentinel-greeting \
+               sentinel-cheat sentinel-watch sentinel-catch \
                sentinel-anon sentinel-macspoof sentinel-detonate sentinel-stealth \
                sentinel-ask sentinel-triage sentinel-engage sentinel-arsenal \
                sentinel-tweaks sentinel-lockout gen-sentinel-menu sentinel-desktop-setup; do

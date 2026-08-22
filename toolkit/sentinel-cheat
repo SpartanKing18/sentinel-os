@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# sentinel-cheat — instant, offline AI cheat sheet for a tool or technique. Uses the
+# free local model (no API key, no cost). e.g. `sentinel-cheat smb enumeration`.
+set -uo pipefail
+Q="$*"; [ -n "$Q" ] || { echo "usage: sentinel-cheat <tool|technique>   e.g. sentinel-cheat kerberoasting"; exit 1; }
+command -v sentinel-ai >/dev/null || { echo "sentinel-ai engine not found"; exit 1; }
+sentinel-ai -s "You are a penetration-testing quick-reference. Reply with a TIGHT cheat sheet only: exact runnable commands (one per line, with placeholders like <target>/<user>/<wordlist>), grouped by phase (Enumerate → Exploit → Post/Privesc). No intro, no prose, no explanations beyond a 3-word inline note per command. Tools on this box: nmap, masscan, sqlmap, nuclei, ffuf, gobuster, wfuzz, hydra, john, hashcat, nikto, wpscan, aircrack-ng, wireshark, tcpdump, radare2, metasploit, python3-impacket, netcat, tor, proxychains4 (netexec/crackmapexec if installed)." \
+  "Cheat sheet for: $Q"
