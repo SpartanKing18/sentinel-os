@@ -144,7 +144,7 @@ if [ -x /usr/lib/x86_64-linux-gnu/xfce4/panel/plugins/libwhiskermenu.so ] || \
   [ -f "$MICON" ] || MICON=start-here
   xfconf-query -c xfce4-panel -p /plugins/plugin-24 -n -t string -s whiskermenu 2>/dev/null
   cat > "$HOME/.config/xfce4/panel/whiskermenu-24.rc" <<RCEOF
-favorites=exo-open --launch TerminalEmulator,firefox-esr.desktop,exo-open --launch FileManager
+favorites=exo-open --launch TerminalEmulator,google-chrome.desktop,exo-open --launch FileManager
 recent=
 button-title=Sentinel
 button-icon=$MICON

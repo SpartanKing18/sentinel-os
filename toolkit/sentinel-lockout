@@ -126,12 +126,18 @@ disengage(){
 }
 
 status(){
-  if [ -f "$STATE/engaged" ]; then
+  # Reconcile the flag with reality: the nftables/sysctl enforcement is runtime-only
+  # (a reboot clears it), so trust the actual firewall table, not just the flag file.
+  local fw=absent; nft list table inet lockout >/dev/null 2>&1 && fw=active
+  if [ -f "$STATE/engaged" ] && [ "$fw" = active ]; then
     printf '%s%s● LOCKED DOWN%s\n' "$C_B" "$C_R" "$C_0"
+  elif [ -f "$STATE/engaged" ]; then
+    printf '%s%s● lockdown CLEARED by reboot%s — inbound is open again; re-run %slockout on%s to re-engage\n' "$C_B" "$C_Y" "$C_0" "$C_B" "$C_0"
+    rm -f "$STATE/engaged"
   else
     printf '%s%s● normal%s\n' "$C_B" "$C_G" "$C_0"
   fi
-  echo "Firewall table 'lockout': $(nft list table inet lockout >/dev/null 2>&1 && echo active || echo absent)"
+  echo "Firewall table 'lockout': $fw"
   echo "Current listeners:"; ss -tulnp 2>/dev/null | awk 'NR==1 || /LISTEN/{print "  "$0}' | head -20
 }
 

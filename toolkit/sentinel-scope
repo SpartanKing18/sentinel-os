@@ -31,7 +31,7 @@ PY
 
 case "$cmd" in
   add)   for t in "$@"; do grep -qxF "$t" "$CFG" 2>/dev/null || echo "$t" >> "$CFG"; echo "[+] in scope: $t"; done ;;
-  rm|del) for t in "$@"; do grep -vxF "$t" "$CFG" > "$CFG.tmp" 2>/dev/null && mv "$CFG.tmp" "$CFG"; echo "[-] removed: $t"; done ;;
+  rm|del) for t in "$@"; do grep -vxF "$t" "$CFG" > "$CFG.tmp" 2>/dev/null || true; mv "$CFG.tmp" "$CFG"; echo "[-] removed: $t"; done ;;
   clear) : > "$CFG"; echo "[*] scope cleared" ;;
   list)  echo "# Sentinel engagement scope — $CFG"
          if [ -s "$CFG" ]; then grep -vE '^\s*$' "$CFG"; else echo "(empty — add targets:  sentinel-scope add 10.0.0.0/24 example.com)"; fi ;;

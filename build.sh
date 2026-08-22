@@ -25,7 +25,7 @@ reg(){ OS_NAME[$1]="$2"; OS_FAMILY[$1]="$3"; OS_DIR[$1]="$4"; OS_FILE[$1]="$5"; 
 reg debian   "Debian 12 (Bookworm)"  debian  "https://cloud.debian.org/images/cloud/bookworm/latest/"                  'debian-12-genericcloud-amd64(-[0-9.]+)?\.qcow2'  "default · rock-solid neutral base"
 reg ubuntu   "Ubuntu 24.04 LTS"      ubuntu  "https://cloud-images.ubuntu.com/noble/current/"                         'noble-server-cloudimg-amd64\.img'                "popular · huge package universe"
 reg ubuntu22 "Ubuntu 22.04 LTS"      ubuntu  "https://cloud-images.ubuntu.com/jammy/current/"                         'jammy-server-cloudimg-amd64\.img'                "older LTS"
-reg kali     "Kali Linux (rolling)"  debian  "https://kali.download/cloud-images/current/"                            'kali-linux-.*-cloud-genericcloud-amd64.*\.(qcow2|tar\.xz)' "experimental · already tool-heavy"
+reg kali     "Kali Linux (rolling)"  debian  "https://kali.download/cloud-images/current/"                            'kali-linux-[^"<> ]*cloud-genericcloud-amd64[^"<> ]*\.(qcow2|tar\.xz)' "experimental · already tool-heavy"
 ORDER=(debian ubuntu ubuntu22 kali)
 
 # OSes that CANNOT reuse this cloud-init/apt pipeline — shown so the picker is honest.
@@ -40,8 +40,9 @@ pick_menu(){
   local i=1; for k in "${ORDER[@]}"; do printf "  %d) %-22s %s\n" "$i" "${OS_NAME[$k]}" "${OS_NOTE[$k]}" >&2; i=$((i+1)); done
   printf "  --  not via this pipeline: %s\n" "${!UNSUPPORTED[*]}" >&2
   local ans; read -rp "OS [1-${#ORDER[@]}, default 1]: " ans </dev/tty || ans=1
-  [ -z "$ans" ] && ans=1
-  echo "${ORDER[$((ans-1))]:-debian}"
+  case "$ans" in ''|*[!0-9]*) ans=1;; esac        # non-numeric -> default (else ORDER[-1] picks the last)
+  { [ "$ans" -ge 1 ] && [ "$ans" -le "${#ORDER[@]}" ]; } 2>/dev/null || ans=1
+  echo "${ORDER[$((ans-1))]}"
 }
 
 # ── resolve the chosen base ──────────────────────────────────────────────────
@@ -69,7 +70,7 @@ done
 
 # 1) fetch the base cloud image (qcow2, or a .img which is already qcow2)
 if [ ! -f "$BASE_IMG" ]; then
-  FNAME="$(curl -fsSL "$DIR" | grep -oE "$FILE_RE" | sort -u | head -1)"
+  FNAME="$(curl -fsSL "$DIR" | grep -oE "$FILE_RE" | sort -u | head -1 || true)"
   [ -n "$FNAME" ] || { echo "!! couldn't find a cloud image at $DIR (regex: $FILE_RE)"; echo "   If '$BASE' moved its images, update the registry in build.sh."; exit 1; }
   echo "-- downloading $FNAME ..."
   curl -fL "${DIR}${FNAME}" -o "$BASE_IMG.part"

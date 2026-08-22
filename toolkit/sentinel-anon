@@ -2,7 +2,10 @@
 # System-wide Tor anonymization with an nftables kill-switch + leak self-test.
 # Improves on AnonSurf: native nftables, debian-tor uid, verifies before saying "on".
 set -uo pipefail
-TOR_UID="$(id -u debian-tor 2>/dev/null || id -u tor 2>/dev/null || echo 0)"
+TOR_UID="$(id -u debian-tor 2>/dev/null || id -u tor 2>/dev/null || echo '')"
+# Never fall back to uid 0 — that would exempt ALL root traffic from Tor redirection
+# and the kill-switch, leaking system traffic in the clear.
+[ -n "$TOR_UID" ] || { echo "[!] tor user (debian-tor/tor) not found — refusing to set rules (would exempt root and leak)"; exit 1; }
 TRANS=9040; DNSP=5353; VIRT="10.192.0.0/10"
 need_root(){ [ "$(id -u)" = 0 ] || exec sudo "$0" "$@"; }
 torrc(){ grep -q "TransPort $TRANS" /etc/tor/torrc 2>/dev/null || printf '\n# sentinel-anon\nVirtualAddrNetwork %s\nAutomapHostsOnResolve 1\nTransPort %s\nDNSPort %s\n' "$VIRT" "$TRANS" "$DNSP" >> /etc/tor/torrc; }

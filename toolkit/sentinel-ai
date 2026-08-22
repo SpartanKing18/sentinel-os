@@ -50,7 +50,7 @@ case "$ENGINE" in
     body(){ jq -nc --arg m "$MODEL" --arg s "$SYS" --arg p "$PROMPT" --argjson st "$1" '{model:$m,system:$s,prompt:$p,stream:($st==1)}'; }
     if [ "$STREAM" = 1 ]; then
       curl -sN http://127.0.0.1:11434/api/generate -d "$(body 1)" \
-        | while IFS= read -r line; do printf '%s' "$(printf '%s' "$line" | jq -j '.response // empty' 2>/dev/null)"; done
+        | while IFS= read -r line; do printf '%s' "$line" | jq -j '.response // empty' 2>/dev/null; done
       echo
     else
       curl -s http://127.0.0.1:11434/api/generate -d "$(body 0)" | jq -r '.response // "AI error"'
