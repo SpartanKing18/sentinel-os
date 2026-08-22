@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# sentinel-wallpaper — browse, set, and rotate the Sentinel desktop backgrounds.
+#   sentinel-wallpaper                 list installed wallpapers
+#   sentinel-wallpaper set <n|name>    apply one (by number or filename)
+#   sentinel-wallpaper next | prev     step through the set
+#   sentinel-wallpaper random          pick one at random
+#   sentinel-wallpaper cycle [minutes] auto-rotate (default 15) in the background
+#   sentinel-wallpaper stop            stop auto-rotation
+set -uo pipefail
+DIR="/usr/share/backgrounds/sentinel"
+STATE="$HOME/.sentinel/wallpaper.idx"
+PIDF="$HOME/.sentinel/wallpaper-cycle.pid"
+mkdir -p "$HOME/.sentinel"
+c(){ printf '\e[1;36m%s\e[0m\n' "$*"; }
+
+mapfile -t WP < <(ls "$DIR"/*.png "$DIR"/*.jpg 2>/dev/null | sort)
+[ "${#WP[@]}" -gt 0 ] || { echo "no wallpapers in $DIR"; exit 1; }
+
+# make xfconf reach the running desktop even when invoked over SSH
+sess_env(){
+  [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && return
+  local p; p="$(pgrep -u "$USER" xfce4-session | head -1)"
+  [ -n "$p" ] && export "$(grep -z DBUS_SESSION_BUS_ADDRESS "/proc/$p/environ" 2>/dev/null | tr -d '\0')"
+  export DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}"
+}
+
+apply(){ # $1 = full path — set on every monitor/workspace backdrop
+  sess_env
+  local props
+  props="$(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E '/last-image$')"
+  if [ -n "$props" ]; then
+    while IFS= read -r p; do
+      xfconf-query -c xfce4-desktop -p "$p" -s "$1" 2>/dev/null
+      xfconf-query -c xfce4-desktop -p "${p%/last-image}/image-style" -s 5 2>/dev/null
+    done <<< "$props"
+  else
+    # no backdrop props yet (fresh session): seed monitor0/workspace0
+    xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -n -t string -s "$1" 2>/dev/null
+    xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/image-style -n -t int -s 5 2>/dev/null
+  fi
+  command -v xfdesktop >/dev/null && xfdesktop --reload >/dev/null 2>&1 || true
+}
+
+idx_of(){ # resolve arg (number or name) → array index
+  local a="$1"
+  if [[ "$a" =~ ^[0-9]+$ ]]; then echo $(( (a-1) % ${#WP[@]} )); return; fi
+  local i; for i in "${!WP[@]}"; do [[ "${WP[$i]}" == *"$a"* ]] && { echo "$i"; return; }; done
+  echo -1
+}
+
+cur(){ [ -f "$STATE" ] && cat "$STATE" || echo 0; }
+
+case "${1:-list}" in
+  list|"")
+    c "Sentinel wallpapers ($DIR):"
+    n=1; for w in "${WP[@]}"; do printf '  %d) %s\n' "$n" "$(basename "$w")"; n=$((n+1)); done
+    echo; echo "set:  sentinel-wallpaper set <n>   ·  rotate: sentinel-wallpaper cycle" ;;
+  set)
+    i="$(idx_of "${2:?which? give a number or name}")"; [ "$i" -ge 0 ] || { echo "not found"; exit 1; }
+    apply "${WP[$i]}"; echo "$i" > "$STATE"; c "→ $(basename "${WP[$i]}")" ;;
+  next) i=$(( ($(cur)+1) % ${#WP[@]} )); apply "${WP[$i]}"; echo "$i">"$STATE"; c "→ $(basename "${WP[$i]}")";;
+  prev) i=$(( ($(cur)-1+${#WP[@]}) % ${#WP[@]} )); apply "${WP[$i]}"; echo "$i">"$STATE"; c "→ $(basename "${WP[$i]}")";;
+  random) i=$(( RANDOM % ${#WP[@]} )); apply "${WP[$i]}"; echo "$i">"$STATE"; c "→ $(basename "${WP[$i]}")";;
+  cycle)
+    MIN="${2:-15}"; [ -f "$PIDF" ] && kill "$(cat "$PIDF")" 2>/dev/null || true
+    ( while :; do i=$(( RANDOM % ${#WP[@]} )); apply "${WP[$i]}"; echo "$i">"$STATE"; sleep "$((MIN*60))"; done ) &
+    echo $! > "$PIDF"; c "auto-rotating every ${MIN}m (pid $!) — stop with: sentinel-wallpaper stop" ;;
+  stop) [ -f "$PIDF" ] && { kill "$(cat "$PIDF")" 2>/dev/null; rm -f "$PIDF"; c "rotation stopped"; } || echo "not rotating" ;;
+  *) echo "usage: sentinel-wallpaper {list|set <n|name>|next|prev|random|cycle [min]|stop}" ;;
+esac

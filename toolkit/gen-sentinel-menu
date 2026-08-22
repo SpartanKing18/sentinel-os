@@ -52,6 +52,7 @@ declare -A NATIVE=(
  [sentinel-stealth]="stealth profile"
  [sentinel-lockout]="defensive lockdown"
  [sentinel-tweaks]="control center"
+ [sentinel-wallpaper]="browse, set & rotate desktop backgrounds"
 )
 mkdir -p "$DIRS"
 cat > "$DIRS/sentinel-ai.directory" <<D

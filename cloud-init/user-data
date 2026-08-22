@@ -198,6 +198,12 @@ write_files:
       echo sentinel >> /etc/firejail/firejail.users 2>/dev/null || true
       gen-sentinel-menu 2>/dev/null || true
       install -d /usr/share/backgrounds; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-wallpaper.png" -o /usr/share/backgrounds/sentinel-wallpaper.png 2>/dev/null || true
+      # Sentinel wallpaper set + the switcher/cycler tool
+      install -d /usr/share/backgrounds/sentinel
+      for wp in 01-aurora 02-grid 03-hexnet 04-circuit 05-monolith 06-starfield; do
+        curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/wallpapers/${wp}.png" -o "/usr/share/backgrounds/sentinel/${wp}.png" 2>/dev/null || echo "WALL-SKIP $wp"
+      done
+      curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-wallpaper" -o /usr/local/bin/sentinel-wallpaper && chmod +x /usr/local/bin/sentinel-wallpaper 2>/dev/null || true
       install -d /usr/share/pixmaps; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/google-icon.png" -o /usr/share/pixmaps/sentinel-google.png 2>/dev/null || true
       curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-menu.png" -o /usr/share/pixmaps/sentinel-menu.png 2>/dev/null || true
       # Browser = Google Chrome (Google's own browser: Google homepage, search and

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # First-login desktop branding for Sentinel OS — wallpaper + dark theme. Self-removes.
 set -u
-WALL=/usr/share/backgrounds/sentinel-wallpaper.png
+# default wallpaper: first of the Sentinel set if present, else the legacy single image
+WALL=/usr/share/backgrounds/sentinel/01-aurora.png
+[ -f "$WALL" ] || WALL=/usr/share/backgrounds/sentinel-wallpaper.png
 for i in $(seq 1 20); do xfconf-query -c xfce4-desktop -l >/dev/null 2>&1 && break; sleep 1; done
 # dark theme — pick the best that is ACTUALLY installed (a missing theme name
 # silently falls back to light Adwaita, so check the dirs rather than trusting -s).
@@ -35,10 +37,17 @@ xfconf-query -c xfwm4 -p /general/show_popup_shadow -n -t bool -s false 2>/dev/n
 xfconf-query -c xfwm4 -p /general/box_move         -n -t bool -s true 2>/dev/null
 xfconf-query -c xfwm4 -p /general/box_resize       -n -t bool -s true 2>/dev/null
 xfconf-query -c xfwm4 -p /general/focus_delay      -n -t int  -s 0 2>/dev/null
-# smoothness: no GTK animations / event sounds / on-the-fly thumbnailing in a VM
-xfconf-query -c xsettings -p /Gtk/EnableAnimations -n -t bool -s false 2>/dev/null
+# animations: enable GTK's widget-level animations (menu/expander/switch fades) —
+# these are CPU-cheap and DON'T touch the GPU compositor (which is what hangs
+# vmwgfx). Snappy motion without the lag. Keep event sounds + VM thumbnailing off.
+xfconf-query -c xsettings -p /Gtk/EnableAnimations -n -t bool -s true 2>/dev/null
 xfconf-query -c xsettings -p /Net/EnableEventSounds -n -t bool -s false 2>/dev/null
 xfconf-query -c thunar    -p /misc-thumbnail-mode  -n -t string -s "THUNAR_THUMBNAIL_MODE_NEVER" 2>/dev/null
+# whisker menu opens instantly with a subtle fade; snappy window snapping
+xfconf-query -c xfwm4 -p /general/snap_to_windows -n -t bool -s true 2>/dev/null
+xfconf-query -c xfwm4 -p /general/snap_to_border  -n -t bool -s true 2>/dev/null
+xfconf-query -c xfwm4 -p /general/snap_width       -n -t int  -s 12 2>/dev/null
+xfconf-query -c xfwm4 -p /general/wrap_workspaces  -n -t bool -s false 2>/dev/null
 
 # --- professional dark terminal (JetBrains Mono, teal-accent palette) ---
 mkdir -p "$HOME/.config/xfce4/terminal"
@@ -202,9 +211,10 @@ fi
 # --- deeper theme: Sentinel teal accents across every GTK app (layered over Arc-Dark) ---
 mkdir -p "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0"
 cat > "$HOME/.config/gtk-3.0/gtk.css" <<'CSS'
-/* Sentinel teal accent — selection, focus, progress, links, suggested actions */
+/* Sentinel teal accent + rounded, softly-animated UI (layered over Arc-Dark) */
 @define-color sentinel_teal #1ce0d0;
 @define-color sentinel_teal_soft rgba(28,224,208,0.30);
+/* teal selection / hover / active states */
 *:selected, row:selected, menuitem:hover, *:checked:not(check):not(radio) { background-color:@sentinel_teal; color:#04131a; }
 selection, textview text selection { background-color:@sentinel_teal_soft; color:inherit; }
 progressbar progress, scale > trough > highlight, levelbar block.filled, spinner { background-color:@sentinel_teal; }
@@ -212,6 +222,17 @@ entry:focus-within, *:focus-visible, notebook > header tab:checked { border-colo
 button.suggested-action, .suggested-action { background-image:none; background-color:@sentinel_teal; color:#04131a; }
 *:link, button.link, .link:link { color:@sentinel_teal; }
 check:checked, radio:checked { background-color:@sentinel_teal; color:#04131a; }
+/* smooth micro-interactions — 120ms ease on the things you touch */
+button, entry, .toggle, menuitem, row, notebook tab, headerbar, scale slider, switch, checkbutton, radiobutton {
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 140ms ease, color 120ms ease;
+}
+button:hover { box-shadow: inset 0 0 0 1px rgba(28,224,208,0.45); }
+/* rounded, modern surfaces */
+button, entry, .app-notification { border-radius: 8px; }
+menu, .menu, popover, .popover, .context-menu { border-radius: 10px; }
+menu menuitem, popover modelbutton { border-radius: 6px; margin: 1px 4px; }
+tooltip { border-radius: 8px; }
+scrollbar slider { border-radius: 8px; min-width: 8px; min-height: 8px; }
 CSS
 cp -f "$HOME/.config/gtk-3.0/gtk.css" "$HOME/.config/gtk-4.0/gtk.css" 2>/dev/null || true
 # themed notifications: dark, top-right, subtle
