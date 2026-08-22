@@ -1,0 +1,8 @@
+{
+  "manifest_version": 2,
+  "name": "Sentinel New Tab",
+  "version": "1.1",
+  "description": "Open new tabs on Google.",
+  "browser_specific_settings": { "gecko": { "id": "newtab@sentinel-os", "strict_min_version": "102.0" } },
+  "chrome_url_overrides": { "newtab": "newtab.html" }
+}

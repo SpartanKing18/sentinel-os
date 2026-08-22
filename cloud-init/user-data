@@ -176,9 +176,12 @@ write_files:
       # built-in default search engine.
       FFLIB=$(ls -d /usr/lib/firefox-esr /usr/lib/firefox 2>/dev/null | head -1)
       if [ -n "$FFLIB" ]; then
-        install -d "$FFLIB/defaults/pref"
+        install -d "$FFLIB/defaults/pref" "$FFLIB/distribution/extensions"
         curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/firefox-autoconfig.js" -o "$FFLIB/defaults/pref/autoconfig.js" 2>/dev/null || true
         curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/firefox-sentinel.cfg" -o "$FFLIB/sentinel.cfg" 2>/dev/null || true
+        # new tabs open Google (Firefox has no plain pref for the new-tab URL — a tiny
+        # bundled extension overrides it). autoconfig sets homepage+search to Google too.
+        curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/firefox-newtab.xpi" -o "$FFLIB/distribution/extensions/newtab@sentinel-os.xpi" 2>/dev/null || true
       fi
       # branded LightDM login screen (dark, Sentinel wallpaper, teal accent)
       cat > /etc/lightdm/lightdm-gtk-greeter.conf <<'GRE'
