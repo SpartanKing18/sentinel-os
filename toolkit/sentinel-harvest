@@ -17,10 +17,12 @@ c "== Sentinel Harvest · $D =="
 
 # 1) subdomains via certificate transparency (crt.sh) — passive, free
 c "→ subdomains (crt.sh certificate transparency)…"
+Dlc="$(printf '%s' "$D" | tr 'A-Z' 'a-z')"; Dre="${Dlc//./\\.}"   # lowercased + dots escaped for the regex
 SUBS="$(curl -fsS --max-time 30 "https://crt.sh/?q=%25.$D&output=json" 2>/dev/null \
   | tr ',{}[]' '\n' | grep -oE '"(common_name|name_value)":"[^"]+"' | cut -d'"' -f4 \
-  | tr 'A-Z' 'a-z' | sed 's/\*\.//' | grep -E "(^|\.)$D\$" | sort -u)"
+  | sed 's/\\n/\n/g' | tr 'A-Z' 'a-z' | sed 's/\*\.//' | grep -E "(^|\.)$Dre\$" | sort -u)"
 printf '%s\n' "$SUBS" > "$DIR/subdomains.txt"
+{ echo "== SUBDOMAINS =="; printf '%s\n' "$SUBS" | head -60; } >> "$OUT"   # so the AI brief actually sees them
 NSUB=$(printf '%s\n' "$SUBS" | grep -c . || true)
 log "[subdomains] $NSUB found"; printf '%s\n' "$SUBS" | sed 's/^/  /' | head -40
 [ "${NSUB:-0}" -gt 40 ] && log "  … $((NSUB-40)) more in $DIR/subdomains.txt"
@@ -39,9 +41,10 @@ log "[mail-security] SPF: ${SPF:-MISSING}    DMARC: ${DMARC:-MISSING}"
 c "→ resolving subdomains to live hosts…"
 LIVE="$DIR/live-hosts.txt"; : > "$LIVE"; i=0
 while IFS= read -r s; do [ -z "$s" ] && continue; i=$((i+1)); [ "$i" -gt 80 ] && break
-  ip="$(dig +short "$s" A | grep -E '^[0-9]' | head -1)"; [ -n "$ip" ] && printf '%s -> %s\n' "$s" "$ip" >> "$LIVE"
+  ip="$(dig +time=2 +tries=1 +short "$s" A | grep -E '^[0-9]' | head -1)"; [ -n "$ip" ] && printf '%s -> %s\n' "$s" "$ip" >> "$LIVE"
 done <<< "$SUBS"
 log "[live-hosts] $(grep -c . "$LIVE" 2>/dev/null || echo 0) resolvable (→ $LIVE)"
+{ echo "== LIVE HOSTS =="; head -40 "$LIVE"; } >> "$OUT" 2>/dev/null   # feed the AI the actual hosts
 head -20 "$LIVE" 2>/dev/null | sed 's/^/  /'
 
 # 4) likely corporate email format (inference — no scraping)

@@ -3,7 +3,7 @@
 T=$'\e[38;5;44m'; B=$'\e[1m'; D=$'\e[38;5;245m'; W=$'\e[38;5;231m'; R=$'\e[0m'
 os="$( . /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-Linux}")"
 k="$(uname -r)"
-tools=$(compgen -c 2>/dev/null | grep -cE '^(nmap|sqlmap|nuclei|ffuf|httpx|hydra|john|hashcat|msfconsole|nikto|gobuster|wpscan|aircrack-ng|wireshark|radare2|sentinel-)' || echo "?")
+tools=$(compgen -c 2>/dev/null | grep -cE '^(nmap|sqlmap|nuclei|ffuf|httpx|hydra|john|hashcat|msfconsole|nikto|gobuster|wpscan|aircrack-ng|wireshark|radare2|sentinel-)')   # grep -c prints 0 on no match; no `|| echo` (that double-prints)
 tips=("sentinel-agent <target>   — autonomous OSINT→recon→report"
       "sentinel-harvest <domain> — passive OSINT (subdomains, mail, hosts)"
       "sentinel-scope add <cidr>  — authorize targets (tools refuse the rest)"

@@ -25,16 +25,22 @@ HOSTS="$T"
 if ! is_ip "$T"; then
   say "» Phase 1 — OSINT harvest"
   command -v sentinel-harvest >/dev/null && sentinel-harvest "$T" >>"$LOG" 2>&1 || true
-  OS_DIR="$(ls -dt "$HOME"/engagements/*"osint"* 2>/dev/null | head -1)"
+  # only THIS target's osint dir (match the sanitized name) — never a different engagement's
+  SAFE_T="${T//[^A-Za-z0-9._-]/_}"
+  OS_DIR="$(ls -dt "$HOME"/engagements/"${SAFE_T}"-osint-* 2>/dev/null | head -1)"
   if [ -n "${OS_DIR:-}" ] && [ -s "$OS_DIR/live-hosts.txt" ]; then
     HOSTS="$(awk -F' -> ' '{print $1}' "$OS_DIR/live-hosts.txt" | head -8)"
   fi
   say "  targets to probe: $(printf '%s ' $HOSTS)"
 fi
+# every discovered host must ALSO be in scope before we touch it (subdomains inherit
+# the parent domain's scope, but re-check to be safe)
+in_scope(){ ! command -v sentinel-scope >/dev/null || sentinel-scope guard "$1" >/dev/null 2>&1; }
 
 # ── Phase 2: recon each host ───────────────────────────────────────────────────
 say "» Phase 2 — recon"
 for h in $HOSTS; do
+  if ! in_scope "$h"; then say "  ⤫ $h — out of scope, skipped"; continue; fi
   say "  · $h  (nmap top-200 + versions, whatweb)"
   run nmap -Pn -T4 --top-ports 200 -sV "$h"
   command -v whatweb >/dev/null && run whatweb -a1 "$h"
@@ -51,6 +57,7 @@ fi
 if [ "$AGGR" = 1 ]; then
   say "» Phase 4 — active vuln checks (aggressive mode)"
   for h in $HOSTS; do
+    if ! in_scope "$h"; then say "  ⤫ $h — out of scope, skipped"; continue; fi
     command -v httpx  >/dev/null && run httpx -silent -title -tech-detect -status-code -u "$h"
     command -v nuclei >/dev/null && run nuclei -silent -severity medium,high,critical -u "http://$h"
   done
