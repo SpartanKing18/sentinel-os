@@ -171,6 +171,12 @@ write_files:
       [ -d /opt/sentinel-cli ] || timeout 180 git clone --depth 1 https://github.com/SpartanKing18/sentinel-cli /opt/sentinel-cli
       ( cd /opt/sentinel-cli && { timeout 300 npm install --omit=dev --no-audit --no-fund || timeout 300 npm install --no-audit --no-fund || true; }; npm link || ln -sf /opt/sentinel-cli/sentinel.js /usr/local/bin/sentinel )
       chmod +x /opt/sentinel-cli/sentinel.js || true
+      # Bundled MCP tools that ship with Nexus — pre-install their runtimes + packages so
+      # they auto-connect instantly (and offline) on first launch. Best-effort; if any of
+      # this fails, Nexus just npx/uvx-installs the server the first time it's used.
+      command -v uvx >/dev/null 2>&1 || curl -LsSf --max-time 120 https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh || true
+      timeout 300 npm install -g @modelcontextprotocol/server-memory @modelcontextprotocol/server-sequential-thinking @upstash/context7-mcp 2>/dev/null || echo "MCP-NPM-SKIP"
+      if command -v uv >/dev/null 2>&1; then for pkg in mcp-server-fetch mcp-server-time mcp-server-git; do timeout 180 uv tool install "$pkg" 2>/dev/null || echo "MCP-UVX-SKIP $pkg"; done; fi
       # Sentinel toolkit — adopted-and-improved distro features + unique AI tools
       for s in sentinel-ai sentinel-scope sentinel-recon sentinel-loot \
                sentinel-harvest sentinel-agent sentinel-greeting \
