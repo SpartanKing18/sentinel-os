@@ -47,11 +47,41 @@ head -20 "$LIVE" 2>/dev/null | sed 's/^/  /'
 # 4) likely corporate email format (inference — no scraping)
 log "[emails] likely formats: {first}.{last}@$D · {f}{last}@$D · {first}@$D"
 
-# 5) AI attack-surface brief
+# 5) Wayback Machine — archived URLs (passive; surfaces old endpoints/params/files)
+c "→ Wayback Machine archived URLs…"
+WB="$(curl -fsS --max-time 25 "http://web.archive.org/cdx/search/cdx?url=$D/*&output=text&fl=original&collapse=urlkey&limit=400" 2>/dev/null | sort -u)"
+printf '%s\n' "$WB" > "$DIR/wayback-urls.txt"
+NWB=$(printf '%s\n' "$WB" | grep -c . || true)
+log "[wayback] $NWB archived URLs (→ wayback-urls.txt); interesting ones:"
+printf '%s\n' "$WB" | grep -iE '\?|/api/|admin|login|logout|upload|config|backup|\.env|\.sql|\.bak|\.json|token|key' | head -15 | sed 's/^/  ! /' | tee -a "$OUT"
+
+# 6) ASN / netblock (Team Cymru whois — passive; expands to the org's IP space)
+c "→ ASN / netblock…"
+IP1="$(dig +short "$D" A | grep -E '^[0-9]' | head -1)"
+if [ -n "$IP1" ]; then
+  ASN="$(whois -h whois.cymru.com " -v $IP1" 2>/dev/null | tail -1 | tr -s ' ')"
+  log "[asn] $IP1 → $ASN"
+  ORG="$(whois "$IP1" 2>/dev/null | grep -iE '^(netrange|cidr|orgname|org-name|netname|descr):' | head -5 | sed 's/^/    /')"
+  [ -n "$ORG" ] && printf '%s\n' "$ORG" | tee -a "$OUT"
+fi
+
+# 7) GitHub exposure (public search; richer with GITHUB_TOKEN for code/secret search)
+c "→ GitHub exposure…"
+GH_AUTH=(); [ -n "${GITHUB_TOKEN:-}" ] && GH_AUTH=(-H "Authorization: Bearer $GITHUB_TOKEN")
+GHR="$(curl -fsS --max-time 20 "${GH_AUTH[@]}" "https://api.github.com/search/repositories?q=$D&per_page=8" 2>/dev/null | jq -r '.items[]?.full_name' 2>/dev/null)"
+log "[github] repos mentioning $D:"; printf '%s\n' "$GHR" | grep -v '^$' | sed 's/^/    /' | tee -a "$OUT" | head
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+  GHC="$(curl -fsS --max-time 20 "${GH_AUTH[@]}" "https://api.github.com/search/code?q=$D&per_page=8" 2>/dev/null | jq -r '.items[]? | "    "+.repository.full_name+" — "+.path' 2>/dev/null)"
+  [ -n "$GHC" ] && { log "[github] code hits (possible leaks):"; printf '%s\n' "$GHC" | tee -a "$OUT"; }
+else
+  log "    (export GITHUB_TOKEN to enable code search for leaked secrets/config)"
+fi
+
+# 8) AI attack-surface brief
 c "== Sentinel AI · attack surface =="
 if command -v sentinel-ai >/dev/null; then
   head -c 8000 "$OUT" | sentinel-ai -s "You are a red-team OSINT analyst turning passive recon into an attack-surface brief." \
-    "Domain: $D. From this passive OSINT produce, in Markdown: (1) the external attack surface — the subdomains/hosts most worth probing and why; (2) mail-security gaps (SPF/DMARC) and spoofing/phishing risk; (3) the 5 highest-value next recon actions with EXACT commands against the hosts you flagged; (4) the most likely corporate email format. Be concrete." | tee "$DIR/analysis.md"
+    "Domain: $D. From this passive OSINT produce, in Markdown: (1) the external attack surface — the subdomains/hosts most worth probing and why; (2) interesting archived endpoints/files from the Wayback URLs worth revisiting; (3) mail-security gaps (SPF/DMARC) + spoofing/phishing risk; (4) the ASN/netblock and whether it implies more org-owned IP space to enumerate; (5) any GitHub exposure worth investigating; (6) the 5 highest-value next recon actions with EXACT commands; (7) the likely corporate email format. Be concrete." | tee "$DIR/analysis.md"
 else
   log "(install the sentinel-ai engine for the AI attack-surface brief)"
 fi
