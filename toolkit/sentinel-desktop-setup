@@ -199,6 +199,28 @@ if command -v gio >/dev/null 2>&1; then
   done
 fi
 
+# --- deeper theme: Sentinel teal accents across every GTK app (layered over Arc-Dark) ---
+mkdir -p "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0"
+cat > "$HOME/.config/gtk-3.0/gtk.css" <<'CSS'
+/* Sentinel teal accent — selection, focus, progress, links, suggested actions */
+@define-color sentinel_teal #1ce0d0;
+@define-color sentinel_teal_soft rgba(28,224,208,0.30);
+*:selected, row:selected, menuitem:hover, *:checked:not(check):not(radio) { background-color:@sentinel_teal; color:#04131a; }
+selection, textview text selection { background-color:@sentinel_teal_soft; color:inherit; }
+progressbar progress, scale > trough > highlight, levelbar block.filled, spinner { background-color:@sentinel_teal; }
+entry:focus-within, *:focus-visible, notebook > header tab:checked { border-color:@sentinel_teal; }
+button.suggested-action, .suggested-action { background-image:none; background-color:@sentinel_teal; color:#04131a; }
+*:link, button.link, .link:link { color:@sentinel_teal; }
+check:checked, radio:checked { background-color:@sentinel_teal; color:#04131a; }
+CSS
+cp -f "$HOME/.config/gtk-3.0/gtk.css" "$HOME/.config/gtk-4.0/gtk.css" 2>/dev/null || true
+# themed notifications: dark, top-right, subtle
+xfconf-query -c xfce4-notifyd -p /notify-location   -n -t string -s "top-right" 2>/dev/null || true
+xfconf-query -c xfce4-notifyd -p /theme             -n -t string -s "Default"   2>/dev/null || true
+xfconf-query -c xfce4-notifyd -p /initial-opacity   -n -t double -s 0.94        2>/dev/null || true
+# accent the panel highlight + whisker button already teal; refresh xsettings so gtk.css applies
+xfsettingsd --replace >/dev/null 2>&1 &
+
 # --- keyboard shortcuts: Super = menu, F12 = Quake-style drop-down terminal, etc. ---
 ks(){ xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/$1" -n -t string -s "$2" 2>/dev/null || \
       xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/$1" -t string -s "$2" 2>/dev/null; }

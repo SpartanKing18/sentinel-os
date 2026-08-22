@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# sentinel-crack — smart password-attack orchestrator. Detects what you gave it and picks
+# the right tool + wordlist + rules automatically (hashcat/john for hashes, hydra for a
+# live service, *2john for protected archives). Authorized testing only.
+#   sentinel-crack hashes.txt                     # crack a hash file (auto-detect mode)
+#   sentinel-crack ssh 10.0.0.5 [userlist]        # online attack against a service
+#   sentinel-crack zip secret.zip                 # crack a protected archive
+# env: SENTINEL_WORDLIST overrides the wordlist.
+set -uo pipefail
+c(){ printf '\e[1;36m%s\e[0m\n' "$*"; }
+# pick a wordlist
+WL="${SENTINEL_WORDLIST:-}"
+if [ -z "$WL" ]; then
+  for w in /usr/share/wordlists/rockyou.txt /usr/share/seclists/Passwords/Leaked-Databases/rockyou.txt /usr/share/wordlists/rockyou.txt.gz; do
+    [ -e "$w" ] && { WL="$w"; break; }
+  done
+fi
+[ -n "$WL" ] && [ "${WL##*.}" = "gz" ] && [ -f "$WL" ] && { gunzip -kf "$WL" 2>/dev/null || true; WL="${WL%.gz}"; }
+[ -n "$WL" ] || WL="/usr/share/wordlists/rockyou.txt"
+
+MODE="${1:-}"; [ $# -gt 0 ] && shift
+case "$MODE" in
+  "" ) echo "usage:
+  sentinel-crack <hashfile>                     crack hashes (hashcat/john, auto-detect)
+  sentinel-crack ssh|ftp|smb|rdp|mysql <host> [users]   online attack (hydra)
+  sentinel-crack zip|rar|7z <file>              crack a protected archive
+  wordlist: $WL   (override with SENTINEL_WORDLIST)"; exit 0 ;;
+
+  ssh|ftp|rdp|smb|mysql|postgres|telnet|vnc|http-get )
+    HOST="${1:?target host}"; command -v sentinel-scope >/dev/null && { sentinel-scope guard "$HOST" || exit 3; }
+    command -v hydra >/dev/null || { echo "install hydra"; exit 1; }
+    USERS="${2:-}"
+    c "» hydra $MODE @ $HOST  (wordlist: $WL)"
+    if [ -n "$USERS" ] && [ -f "$USERS" ]; then exec hydra -L "$USERS" -P "$WL" -t 4 -f "$HOST" "$MODE"
+    else c "  no userlist given → trying common users"; printf 'root\nadmin\nuser\n' > /tmp/sc-users.txt; exec hydra -L /tmp/sc-users.txt -P "$WL" -t 4 -f "$HOST" "$MODE"; fi ;;
+
+  zip|rar|7z )
+    F="${1:?archive file}"; [ -f "$F" ] || { echo "no such file: $F"; exit 1; }
+    command -v john >/dev/null || { echo "install john"; exit 1; }
+    TOOL="$(command -v ${MODE}2john ${MODE}2john.pl 2>/dev/null | head -1)"; [ -n "$TOOL" ] || TOOL="$(ls /usr/sbin/${MODE}2john* /usr/bin/${MODE}2john* 2>/dev/null | head -1)"
+    [ -n "$TOOL" ] || { echo "no ${MODE}2john found"; exit 1; }
+    c "» ${MODE}2john + john ($F)"
+    "$TOOL" "$F" > /tmp/sc.hash 2>/dev/null && john --wordlist="$WL" /tmp/sc.hash && john --show /tmp/sc.hash ;;
+
+  * ) # treat as a hash file
+    HF="$MODE"; [ -f "$HF" ] || { echo "no such file / unknown mode: $HF"; exit 1; }
+    c "» cracking hashes in $HF  (wordlist: $WL)"
+    if command -v hashcat >/dev/null; then
+      M="$(hashcat --identify "$HF" 2>/dev/null | grep -oE '^\s*[0-9]+' | head -1 | tr -d ' ' || true)"
+      RULE="/usr/share/hashcat/rules/best64.rule"; [ -f "$RULE" ] || RULE=""
+      if [ -n "$M" ]; then
+        c "  hashcat -m $M  (rockyou${RULE:+ + best64})"
+        hashcat -m "$M" -a 0 --quiet "$HF" "$WL" ${RULE:+-r "$RULE"} || true
+        hashcat -m "$M" "$HF" --show
+      else c "  hashcat couldn't identify → john --format auto"; john --wordlist="$WL" "$HF"; john --show "$HF"; fi
+    elif command -v john >/dev/null; then john --wordlist="$WL" "$HF"; john --show "$HF"
+    else echo "install hashcat or john"; fi ;;
+esac

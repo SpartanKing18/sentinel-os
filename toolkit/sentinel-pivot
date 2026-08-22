@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# sentinel-pivot — set up network pivots for authorized lateral movement. A dynamic SSH
+# SOCKS proxy (auto-wired into proxychains) or local port forwards through a jump host.
+#   sentinel-pivot socks <user@jump> [port]           # SOCKS5 through the jump host
+#   sentinel-pivot local <lport>:<rhost>:<rport> <user@jump>
+#   sentinel-pivot status | down
+# After `socks`, prefix tools with `proxychains4` to route them through the pivot.
+set -uo pipefail
+c(){ printf '\e[1;36m%s\e[0m\n' "$*"; }
+PC="/etc/proxychains4.conf"; [ -f "$PC" ] || PC="/etc/proxychains.conf"
+
+case "${1:-}" in
+  socks)
+    JUMP="${2:?usage: sentinel-pivot socks <user@jump> [port]}"; PORT="${3:-9050}"
+    c "» opening SOCKS5 proxy 127.0.0.1:$PORT via $JUMP …"
+    ssh -f -N -D "127.0.0.1:$PORT" -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 "$JUMP" \
+      || { echo "ssh failed — check creds/host"; exit 1; }
+    # point proxychains at this SOCKS (needs write; sudo if available)
+    if [ -f "$PC" ]; then
+      TMP="$(mktemp)"; grep -vE '^\s*socks[45]\s' "$PC" > "$TMP"; printf 'socks5 127.0.0.1 %s\n' "$PORT" >> "$TMP"
+      if [ -w "$PC" ]; then cp "$TMP" "$PC"; elif sudo -n true 2>/dev/null; then sudo cp "$TMP" "$PC"; else c "  (couldn't edit $PC — run: echo 'socks5 127.0.0.1 $PORT' | sudo tee -a $PC)"; fi
+      rm -f "$TMP"
+    fi
+    c "  live. Route tools through it:"
+    echo "    proxychains4 nmap -sT -Pn <internal-ip>"
+    echo "    proxychains4 curl http://<internal-host>/"
+    echo "  stop it with:  sentinel-pivot down" ;;
+
+  local)
+    SPEC="${2:?usage: sentinel-pivot local <lport>:<rhost>:<rport> <user@jump>}"; JUMP="${3:?user@jump}"
+    IFS=: read -r LP RH RP <<< "$SPEC"
+    [ -n "${LP:-}" ] && [ -n "${RH:-}" ] && [ -n "${RP:-}" ] || { echo "spec must be lport:rhost:rport"; exit 1; }
+    c "» local forward 127.0.0.1:$LP → $RH:$RP via $JUMP …"
+    ssh -f -N -L "127.0.0.1:$LP:$RH:$RP" -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 "$JUMP" \
+      && c "  reach the remote service at 127.0.0.1:$LP" || { echo "ssh failed"; exit 1; } ;;
+
+  status)
+    c "== active pivots =="; pgrep -af "ssh -f -N -[DL]" | grep -v grep || echo "  (none)"
+    echo "  proxychains SOCKS: $(grep -E '^\s*socks' "$PC" 2>/dev/null || echo none)" ;;
+
+  down)
+    if pkill -f "ssh -f -N -[DL]" 2>/dev/null; then c "all pivots closed"; else echo "no pivots running"; fi ;;
+
+  *) echo "usage: sentinel-pivot {socks <user@jump> [port] | local <lp:rh:rp> <user@jump> | status | down}" ;;
+esac
