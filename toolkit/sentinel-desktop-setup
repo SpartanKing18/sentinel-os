@@ -163,4 +163,16 @@ if xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids >/dev/null 2>&1; th
   xfce4-panel -r 2>/dev/null || true
 fi
 
+# --- trust the desktop launchers so xfdesktop stops the "Untrusted application
+#     launcher" prompt on every double-click. It stores a SHA-256 of the file in
+#     gvfs metadata (metadata::xfce-exe-checksum) — exactly what "Mark Executable"
+#     does. Needs gio (libglib2.0-bin) and the live session bus (both present here). ---
+if command -v gio >/dev/null 2>&1; then
+  for f in "$HOME"/Desktop/*.desktop; do
+    [ -e "$f" ] || continue
+    chmod +x "$f" 2>/dev/null
+    gio set -t string "$f" metadata::xfce-exe-checksum "$(sha256sum "$f" | cut -d' ' -f1)" 2>/dev/null || true
+  done
+fi
+
 rm -f "$HOME/.config/autostart/sentinel-desktop-setup.desktop"

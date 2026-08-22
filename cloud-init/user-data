@@ -107,7 +107,7 @@ write_files:
         tor nftables firejail firejail-profiles apparmor apparmor-utils macchanger \
         proxychains4 torsocks keepassxc gnupg whiptail desktop-file-utils \
         xdotool wmctrl libimage-exiftool-perl arc-theme papirus-icon-theme \
-        fonts-inter fonts-jetbrains-mono dmz-cursor-theme xfce4-notifyd kbd \
+        fonts-inter fonts-jetbrains-mono dmz-cursor-theme xfce4-notifyd kbd libglib2.0-bin \
         docker.io docker-compose-plugin"
       for p in $PKGS; do apt-get install -y "$p" || echo "SKIP $p"; done
       usermod -aG docker sentinel 2>/dev/null || true
