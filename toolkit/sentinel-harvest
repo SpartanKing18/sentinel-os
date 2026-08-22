@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# sentinel-harvest — passive OSINT harvester (a Sentinel take on theHarvester).
+# Given a domain it gathers: subdomains (certificate transparency), DNS + mail records,
+# mail-security posture (SPF/DMARC), live-host resolution, and a likely email format —
+# then the local AI turns it into an attack-surface brief. 100% passive, no API keys.
+# Authorized targets only.
+set -uo pipefail
+D="${1:-}"; [ -n "$D" ] || { echo "usage: sentinel-harvest <domain>"; exit 1; }
+D="${D#*://}"; D="${D%%/*}"                       # accept a URL too
+command -v sentinel-scope >/dev/null && { sentinel-scope guard "$D" || exit 3; }
+DIR="$HOME/engagements/${D//[^A-Za-z0-9._-]/_}-osint-$(date -u +%Y%m%d-%H%M%S)"; mkdir -p "$DIR"
+OUT="$DIR/harvest.txt"; : > "$OUT"
+c(){ printf '\e[1;36m%s\e[0m\n' "$*"; }
+log(){ printf '%s\n' "$*" | tee -a "$OUT"; }
+
+c "== Sentinel Harvest · $D =="
+
+# 1) subdomains via certificate transparency (crt.sh) — passive, free
+c "→ subdomains (crt.sh certificate transparency)…"
+SUBS="$(curl -fsS --max-time 30 "https://crt.sh/?q=%25.$D&output=json" 2>/dev/null \
+  | tr ',{}[]' '\n' | grep -oE '"(common_name|name_value)":"[^"]+"' | cut -d'"' -f4 \
+  | tr 'A-Z' 'a-z' | sed 's/\*\.//' | grep -E "(^|\.)$D\$" | sort -u)"
+printf '%s\n' "$SUBS" > "$DIR/subdomains.txt"
+NSUB=$(printf '%s\n' "$SUBS" | grep -c . || true)
+log "[subdomains] $NSUB found"; printf '%s\n' "$SUBS" | sed 's/^/  /' | head -40
+[ "${NSUB:-0}" -gt 40 ] && log "  … $((NSUB-40)) more in $DIR/subdomains.txt"
+
+# 2) DNS + mail records
+c "→ DNS + mail records…"
+{ echo "== A ==";  dig +short "$D" A
+  echo "== NS =="; dig +short "$D" NS
+  echo "== MX =="; dig +short "$D" MX
+  echo "== TXT =="; dig +short "$D" TXT; } | tee -a "$OUT"
+SPF="$(dig +short "$D" TXT | grep -i 'v=spf1' | head -1)"
+DMARC="$(dig +short _dmarc."$D" TXT | grep -i 'v=DMARC1' | head -1)"
+log "[mail-security] SPF: ${SPF:-MISSING}    DMARC: ${DMARC:-MISSING}"
+
+# 3) resolve subdomains to live hosts (capped)
+c "→ resolving subdomains to live hosts…"
+LIVE="$DIR/live-hosts.txt"; : > "$LIVE"; i=0
+while IFS= read -r s; do [ -z "$s" ] && continue; i=$((i+1)); [ "$i" -gt 80 ] && break
+  ip="$(dig +short "$s" A | grep -E '^[0-9]' | head -1)"; [ -n "$ip" ] && printf '%s -> %s\n' "$s" "$ip" >> "$LIVE"
+done <<< "$SUBS"
+log "[live-hosts] $(grep -c . "$LIVE" 2>/dev/null || echo 0) resolvable (→ $LIVE)"
+head -20 "$LIVE" 2>/dev/null | sed 's/^/  /'
+
+# 4) likely corporate email format (inference — no scraping)
+log "[emails] likely formats: {first}.{last}@$D · {f}{last}@$D · {first}@$D"
+
+# 5) AI attack-surface brief
+c "== Sentinel AI · attack surface =="
+if command -v sentinel-ai >/dev/null; then
+  head -c 8000 "$OUT" | sentinel-ai -s "You are a red-team OSINT analyst turning passive recon into an attack-surface brief." \
+    "Domain: $D. From this passive OSINT produce, in Markdown: (1) the external attack surface — the subdomains/hosts most worth probing and why; (2) mail-security gaps (SPF/DMARC) and spoofing/phishing risk; (3) the 5 highest-value next recon actions with EXACT commands against the hosts you flagged; (4) the most likely corporate email format. Be concrete." | tee "$DIR/analysis.md"
+else
+  log "(install the sentinel-ai engine for the AI attack-surface brief)"
+fi
+c "[+] saved → $DIR  (subdomains.txt · live-hosts.txt · analysis.md)"

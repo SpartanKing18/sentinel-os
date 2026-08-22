@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# sentinel-greeting — a branded banner shown on new interactive shells.
+T=$'\e[38;5;44m'; B=$'\e[1m'; D=$'\e[38;5;245m'; W=$'\e[38;5;231m'; R=$'\e[0m'
+os="$( . /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-Linux}")"
+k="$(uname -r)"
+tools=$(compgen -c 2>/dev/null | grep -cE '^(nmap|sqlmap|nuclei|ffuf|httpx|hydra|john|hashcat|msfconsole|nikto|gobuster|wpscan|aircrack-ng|wireshark|radare2|sentinel-)' || echo "?")
+tips=("sentinel-agent <target>   — autonomous OSINT→recon→report"
+      "sentinel-harvest <domain> — passive OSINT (subdomains, mail, hosts)"
+      "sentinel-scope add <cidr>  — authorize targets (tools refuse the rest)"
+      "sentinel-recon <target>   — AI recon + prioritized next steps"
+      "sentinel-lockout           — emergency defensive lockdown"
+      "sentinel-ask \"...\"          — natural language → command")
+tip="${tips[$RANDOM % ${#tips[@]}]}"
+printf '\n'
+printf '  %s%s███████ ███████ ███    ██ ████████ ██ ███    ██ ███████ ██      %s\n' "$T" "$B" "$R"
+printf '  %s%s██      ██      ████   ██    ██    ██ ████   ██ ██      ██      %s\n' "$T" "$B" "$R"
+printf '  %s%s███████ █████   ██ ██  ██    ██    ██ ██ ██  ██ █████   ██      %s\n' "$T" "$B" "$R"
+printf '  %s%s     ██ ██      ██  ██ ██    ██    ██ ██  ██ ██ ██      ██      %s\n' "$T" "$B" "$R"
+printf '  %s%s███████ ███████ ██   ████    ██    ██ ██   ████ ███████ ███████ %s\n' "$T" "$B" "$R"
+printf '  %sagentic security workstation%s\n\n' "$D" "$R"
+printf '  %s%s %s   ·   kernel %s%s%s   ·   %s%s%s tools ready\n' "$W" "$B" "$os$R" "$B" "$k" "$R" "$B" "$tools" "$R"
+printf '  %stry:%s %s%s%s\n\n' "$D" "$R" "$T" "$tip" "$R"

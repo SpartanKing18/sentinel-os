@@ -73,9 +73,17 @@ write_files:
         ollama list 2>/dev/null | grep -qiE "llama3|qwen|mistral" || { echo "[*] pulling a local model (one-time)…"; ollama pull llama3.2:3b || true; }
       fi
       echo "== Sentinel Autopilot — autonomous AI hacking =="
-      read -rp "Goal (e.g. 'recon and exploit 10.0.0.5 for a shell'): " GOAL
-      [ -n "$GOAL" ] || { echo "no goal given"; exit 1; }
-      exec sentinel nexus run "$GOAL" -e ollama
+      echo "  1) Autonomous recon on a target   (sentinel-agent: OSINT -> recon -> AI report)"
+      echo "  2) Freeform AI hacking goal        (Nexus autonomous run)"
+      read -rp "choose [1/2]: " MODE
+      case "${MODE:-1}" in
+        2) read -rp "Goal (e.g. 'recon and exploit 10.0.0.5 for a shell'): " GOAL
+           [ -n "$GOAL" ] || { echo "no goal given"; exit 1; }
+           exec sentinel nexus run "$GOAL" -e ollama ;;
+        *) read -rp "Target (ip or domain): " TGT
+           [ -n "$TGT" ] || { echo "no target"; exit 1; }
+           exec sentinel-agent "$TGT" ;;
+      esac
   - path: /usr/local/sbin/sentinel-provision.sh
     permissions: "0755"
     content: |
@@ -165,6 +173,7 @@ write_files:
       chmod +x /opt/sentinel-cli/sentinel.js || true
       # Sentinel toolkit — adopted-and-improved distro features + unique AI tools
       for s in sentinel-ai sentinel-scope sentinel-recon sentinel-loot \
+               sentinel-harvest sentinel-agent sentinel-greeting \
                sentinel-anon sentinel-macspoof sentinel-detonate sentinel-stealth \
                sentinel-ask sentinel-triage sentinel-engage sentinel-arsenal \
                sentinel-tweaks sentinel-lockout gen-sentinel-menu sentinel-desktop-setup; do
@@ -185,6 +194,7 @@ write_files:
       LOCK
       sed -i 's/^      //' /usr/share/applications/sentinel-lockout.desktop
       command -v firecfg >/dev/null && firecfg >/dev/null 2>&1 || true   # auto-sandbox common apps
+      echo sentinel >> /etc/firejail/firejail.users 2>/dev/null || true
       gen-sentinel-menu 2>/dev/null || true
       install -d /usr/share/backgrounds; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-wallpaper.png" -o /usr/share/backgrounds/sentinel-wallpaper.png 2>/dev/null || true
       install -d /usr/share/pixmaps; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/google-icon.png" -o /usr/share/pixmaps/sentinel-google.png 2>/dev/null || true
@@ -255,6 +265,14 @@ write_files:
       D
       chown sentinel:sentinel /home/sentinel/Desktop/*.desktop 2>/dev/null || true
       chmod +x /home/sentinel/Desktop/*.desktop 2>/dev/null || true
+      # Branded shell: a Sentinel banner on new terminals + a teal Sentinel prompt
+      if ! grep -q "sentinel-greeting" /home/sentinel/.bashrc 2>/dev/null; then
+        cat >> /home/sentinel/.bashrc <<'BRC'
+      # --- Sentinel branding ---
+      [ -n "$PS1" ] && command -v sentinel-greeting >/dev/null && sentinel-greeting
+      export PS1='\[\e[38;5;44m\]\u@sentinel\[\e[0m\]:\[\e[38;5;231m\]\w\[\e[38;5;44m\]$\[\e[0m\] '
+      BRC
+      fi
       # cloud-init write_files ran as root and left parts of the home root-owned
       # (esp. ~/.config), which breaks xfconfd -> the XFCE session. Fix ownership.
       chown -R sentinel:sentinel /home/sentinel

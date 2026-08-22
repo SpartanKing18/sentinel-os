@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# sentinel-agent — the fully-agentic driver. Point it at an authorized target and it
+# runs an autonomous loop: OSINT harvest → recon → the local AI plans the next moves →
+# (optional) active vuln scanning → an AI engagement report. Scope-guarded; passive and
+# non-destructive by default (set SENTINEL_AGENT_AGGRESSIVE=1 for active checks).
+set -uo pipefail
+T="${1:-}"; [ -n "$T" ] || read -rp "Target (ip or domain): " T
+[ -n "$T" ] || { echo "no target"; exit 1; }
+T="${T#*://}"; T="${T%%/*}"
+command -v sentinel-scope >/dev/null && { sentinel-scope guard "$T" || exit 3; }
+AGGR="${SENTINEL_AGENT_AGGRESSIVE:-0}"
+DIR="$HOME/engagements/${T//[^A-Za-z0-9._-]/_}-agent-$(date -u +%Y%m%d-%H%M%S)"; mkdir -p "$DIR"
+LOG="$DIR/agent.log"; : > "$LOG"
+say(){ printf '\e[1;36m%s\e[0m\n' "$*" | tee -a "$LOG"; }
+run(){ printf '\n$ %s\n' "$*" >> "$LOG"; "$@" >> "$LOG" 2>&1 || true; }
+is_ip(){ printf '%s' "$1" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; }
+
+say "╔════════════════════════════════════════════╗"
+say "║   SENTINEL AGENT · autonomous recon loop     ║"
+say "╚════════════════════════════════════════════╝"
+say "target: $T   ·   aggressive: $([ "$AGGR" = 1 ] && echo ON || echo off)   ·   $DIR"
+
+# ── Phase 1: OSINT (domains only) ──────────────────────────────────────────────
+HOSTS="$T"
+if ! is_ip "$T"; then
+  say "» Phase 1 — OSINT harvest"
+  command -v sentinel-harvest >/dev/null && sentinel-harvest "$T" >>"$LOG" 2>&1 || true
+  OS_DIR="$(ls -dt "$HOME"/engagements/*"osint"* 2>/dev/null | head -1)"
+  if [ -n "${OS_DIR:-}" ] && [ -s "$OS_DIR/live-hosts.txt" ]; then
+    HOSTS="$(awk -F' -> ' '{print $1}' "$OS_DIR/live-hosts.txt" | head -8)"
+  fi
+  say "  targets to probe: $(printf '%s ' $HOSTS)"
+fi
+
+# ── Phase 2: recon each host ───────────────────────────────────────────────────
+say "» Phase 2 — recon"
+for h in $HOSTS; do
+  say "  · $h  (nmap top-200 + versions, whatweb)"
+  run nmap -Pn -T4 --top-ports 200 -sV "$h"
+  command -v whatweb >/dev/null && run whatweb -a1 "$h"
+done
+
+# ── Phase 3: the AI plans the next moves ───────────────────────────────────────
+say "» Phase 3 — AI planning"
+if command -v sentinel-ai >/dev/null; then
+  head -c 9000 "$LOG" | sentinel-ai -q -s "You are an autonomous pentest planner. From recon output, output a SHORT Markdown checklist of the next concrete actions with exact commands. Passive/enumeration only unless told otherwise; never suggest destructive commands." \
+    "Target $T. List up to 6 prioritized next actions." | tee "$DIR/plan.md"
+fi
+
+# ── Phase 4: act (active checks are opt-in) ────────────────────────────────────
+if [ "$AGGR" = 1 ]; then
+  say "» Phase 4 — active vuln checks (aggressive mode)"
+  for h in $HOSTS; do
+    command -v httpx  >/dev/null && run httpx -silent -title -tech-detect -status-code -u "$h"
+    command -v nuclei >/dev/null && run nuclei -silent -severity medium,high,critical -u "http://$h"
+  done
+else
+  say "» Phase 4 — skipped (export SENTINEL_AGENT_AGGRESSIVE=1 to run httpx/nuclei)"
+fi
+
+# ── Phase 5: AI engagement report ──────────────────────────────────────────────
+say "» Phase 5 — report"
+if command -v sentinel-ai >/dev/null; then
+  head -c 12000 "$LOG" | sentinel-ai -s "You write concise red-team engagement reports in Markdown." \
+    "Target: $T. Write: Executive Summary · Attack Surface · Findings (each with a risk rating) · Prioritized Next Steps (exact commands). Base it strictly on the recon log — invent nothing." > "$DIR/report.md"
+fi
+say "[+] done → $DIR/report.md   (log: $LOG)"
+command -v xdg-open >/dev/null && [ -n "${DISPLAY:-}" ] && xdg-open "$DIR/report.md" 2>/dev/null &

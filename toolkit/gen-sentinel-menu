@@ -35,6 +35,8 @@ done
 
 # Sentinel's own AI-powered & ops tools (open a terminal ready to use them)
 declare -A NATIVE=(
+ [sentinel-agent]="fully-agentic autonomous recon → AI report"
+ [sentinel-harvest]="passive OSINT harvester (subdomains, mail, hosts)"
  [sentinel-recon]="AI recon + prioritised next steps"
  [sentinel-triage]="fast AI target triage"
  [sentinel-engage]="engagement workspace + AI report"
