@@ -115,7 +115,7 @@ write_files:
       echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
       # Our own desktop (XFCE) + tools from Debian — installed one-by-one so a
       # single unavailable package can't abort the batch.
-      PKGS="xfce4 xfce4-terminal xfce4-goodies xfce4-whiskermenu-plugin lightdm dbus-x11 firefox-esr \
+      PKGS="xfce4 xfce4-terminal xfce4-goodies xfce4-whiskermenu-plugin lightdm dbus-x11 \
         git curl wget jq unzip build-essential python3 python3-pip pipx nodejs npm \
         nmap masscan dnsutils whois net-tools tcpdump \
         nikto whatweb wafw00f dnsrecon dirb wfuzz gobuster \
@@ -189,19 +189,14 @@ write_files:
       install -d /usr/share/backgrounds; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-wallpaper.png" -o /usr/share/backgrounds/sentinel-wallpaper.png 2>/dev/null || true
       install -d /usr/share/pixmaps; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/google-icon.png" -o /usr/share/pixmaps/sentinel-google.png 2>/dev/null || true
       curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-menu.png" -o /usr/share/pixmaps/sentinel-menu.png 2>/dev/null || true
-      # Firefox: default startup page = Sentinel console, via autoconfig (a
-      # user-CHANGEABLE default, NOT a policy — so no "managed by your organization"
-      # banner and Google + all settings remain freely editable). Google stays the
-      # built-in default search engine.
-      FFLIB=$(ls -d /usr/lib/firefox-esr /usr/lib/firefox 2>/dev/null | head -1)
-      if [ -n "$FFLIB" ]; then
-        install -d "$FFLIB/defaults/pref" "$FFLIB/distribution/extensions"
-        curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/firefox-autoconfig.js" -o "$FFLIB/defaults/pref/autoconfig.js" 2>/dev/null || true
-        curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/firefox-sentinel.cfg" -o "$FFLIB/sentinel.cfg" 2>/dev/null || true
-        # new tabs open Google (Firefox has no plain pref for the new-tab URL — a tiny
-        # bundled extension overrides it). autoconfig sets homepage+search to Google too.
-        curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/firefox-newtab.xpi" -o "$FFLIB/distribution/extensions/newtab@sentinel-os.xpi" 2>/dev/null || true
-      fi
+      # Browser = Google Chrome (Google's own browser: Google homepage, search and
+      # new-tab out of the box). Installed from Google's apt repo; set as the default.
+      curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null || true
+      echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+      apt-get update -qq 2>/dev/null || true
+      apt-get install -y google-chrome-stable || echo "CHROME-SKIP"
+      update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/bin/google-chrome-stable 200 2>/dev/null || true
+      update-alternatives --set x-www-browser /usr/bin/google-chrome-stable 2>/dev/null || true
       # branded LightDM login screen (dark, Sentinel wallpaper, teal accent)
       cat > /etc/lightdm/lightdm-gtk-greeter.conf <<'GRE'
       [greeter]

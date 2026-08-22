@@ -97,16 +97,35 @@ if [ -f "$WALL" ]; then
 fi
 
 # --- Kali-style single top panel: launchers up top + a Google web-search button ---
+# browser = Google Chrome (Google's own browser). Wire the launchers + default to it.
+BROWSER=google-chrome-stable; command -v "$BROWSER" >/dev/null || BROWSER=x-www-browser
+mkdir -p "$HOME/.config/google-chrome"; : > "$HOME/.config/google-chrome/First Run" 2>/dev/null
+xdg-settings set default-web-browser google-chrome.desktop 2>/dev/null || true
+mkdir -p "$HOME/.config/xfce4"; printf 'WebBrowser=google-chrome\n' > "$HOME/.config/xfce4/helpers.rc"
+# panel browser launcher (plugin-19) -> Chrome
+mkdir -p "$HOME/.config/xfce4/panel/launcher-19"
+cat > "$HOME/.config/xfce4/panel/launcher-19/chrome.desktop" <<DESK
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Google Chrome
+Exec=$BROWSER %U
+Icon=google-chrome
+Terminal=false
+Categories=Network;WebBrowser;
+DESK
+xfconf-query -c xfce4-panel -p /plugins/plugin-19/items -a -t string -s chrome.desktop 2>/dev/null || true
+# Google launcher (plugin-23) -> Chrome @ google.com, Google "G" icon
 GICON=/usr/share/pixmaps/sentinel-google.png
-[ -f "$GICON" ] || GICON=web-browser   # graceful fallback icon name
+[ -f "$GICON" ] || GICON=google-chrome
 mkdir -p "$HOME/.config/xfce4/panel/launcher-23"
 cat > "$HOME/.config/xfce4/panel/launcher-23/google.desktop" <<DESK
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Google Search
-Comment=Search the web with Google
-Exec=firefox-esr https://www.google.com
+Name=Google
+Comment=Google
+Exec=$BROWSER https://www.google.com
 Icon=$GICON
 Terminal=false
 StartupNotify=false
