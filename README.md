@@ -1,57 +1,94 @@
 # Sentinel OS
 
-A unique, self-provisioning security workstation built **from scratch on a neutral Debian base** (not Kali) that bundles everything in the Sentinel
-toolkit: the **Sentinel desktop app** (GUI: recon, scanner, threat intel,
-Gmail/GitHub, the autonomous Assistant) and the **Nexus CLI**
-(`sentinel` / `sentinel nexus`), with its own desktop, its own curated toolset (Debian + upstream — no Kali
-packages), a local-AI autonomous layer, and the Sentinel app as the UI cockpit.
+A self-provisioning security workstation — a Kali/BlackArch alternative that wraps a
+neutral cloud base (Debian, Ubuntu, or Kali) in the **Sentinel** identity: a branded
+XFCE desktop, a curated offensive/defensive toolset, a local-AI layer, and a built-in
+honeypot. You pick the base OS at build time; everything else is installed on first
+boot by cloud-init.
 
-## What's inside
-- **Base:** Debian 12 (generic cloud) + our own XFCE desktop
-- **Sentinel app** (latest `.deb`) — auto-launches on login
-- **Nexus CLI** (`sentinel` / `sentinel nexus`)
-- **Our own curated toolset** (Debian repos + upstream, no Kali packages): nmap,
-  masscan, nikto, whatweb, wafw00f, dnsrecon, dirb, wfuzz, gobuster, sqlmap, hydra,
-  john, hashcat, aircrack-ng, wireshark, ettercap, radare2, binwalk, sleuthkit,
-  impacket, seclists, searchsploit, **metasploit**, and upstream **nuclei /
-  subfinder / httpx / ffuf / netexec**
-- **Autonomous AI (Ollama)** — the desktop **Autopilot** and `sentinel nexus run`
-  do recon + exploitation toward a goal, offline
-- **Adopted-and-improved distro features:** `sentinel-anon` (system-wide Tor + nftables kill-switch + leak self-test, à la Parrot AnonSurf), `sentinel-stealth` (undercover desktop, à la Kali), `sentinel-macspoof` (MAC randomization), `sentinel-detonate` (firejail sandbox for untrusted files), `sentinel-arsenal` (on-demand tool groups, à la BlackArch), a categorized **Sentinel menu**, and `sentinel-tweaks` (a whiptail control center tying them together)
-- **Unique AI features (local LLM):** `sentinel-triage <target>` (AI plans+runs recon → summary+next steps), `sentinel-engage <target>` (engagement workspace + auto-drafted report), `sentinel-ask "..."` (natural-language → command), plus the desktop **Autopilot**
-- **Docker practice lab** (`sentinel lab up`)
+## Architecture
 
-## Build & run
-
-```bash
-./build.sh          # downloads the base image, builds sentinel-os.qcow2 + seed.iso
-./launch.sh         # boots it in QEMU (KVM-accelerated) — a window opens
+```
+   Base cloud image  (Debian 12 · Ubuntu 24.04/22.04 · Kali)
+          |
+          |  build.sh   (chooses the base, builds a cloud-init NoCloud seed)
+          v
+   Sentinel OS disk  +  seed.iso
+          |
+          |  first boot -> cloud-init runs the provisioner
+          v
+   +----------------------------------------------------------+
+   |  Desktop      XFCE · dark theme · Whisker menu · Chrome   |
+   |  Toolkit      recon · web · passwords · wireless · forensics
+   |  AI layer     Ollama + sentinel-ai -> recon / triage / engage / loot
+   |  Defense      sentinel-lockout · sentinel-scope · sentinel-anon
+   |  Honeypot     bundled deception service                   |
+   +----------------------------------------------------------+
+          |
+          v
+   Run it:  launch.sh (QEMU/KVM)   or   export-vbox.sh (VirtualBox)
 ```
 
-First boot self-provisions via cloud-init (installs the app + CLI from the public
-releases) — give it a few minutes, then the XFCE desktop auto-logs-in as
-**`sentinel`** (password `sentinel`), auto-launches the Sentinel app, and opens a
-terminal on Nexus.
+The base image never carries the identity — `build.sh` stamps the chosen family into
+the cloud-init seed, and the provisioner adapts per distro (kernel package, repos)
+before installing the desktop, tools, and AI layer.
 
-### Other launchers
-- **GNOME Boxes / virt-manager:** open `sentinel-os.qcow2` directly.
-- **VirtualBox:** `./export-vbox.sh` then start the "Sentinel OS" VM.
+## Project Structure
 
-## What's inside
-| Component | How it's installed |
-|---|---|
-| Sentinel desktop app | latest `.deb` from the `sentinel` GitHub release |
-| Nexus CLI (`sentinel`) | `git clone` + `npm link` from `sentinel-cli` |
-| Desktop | XFCE + LightDM autologin |
-| Tools | nmap, whois, dnsutils, node, python3, jq, net-tools |
-
-## Config
-- RAM/CPUs: `SENTINEL_RAM=8192 SENTINEL_CPUS=4 ./launch.sh`
-- Port-forwards (host→guest): `2222→22` (ssh), `8099→8099` (honeypot AI bridge), `8080→80`.
-- Change the default password after first login (`passwd`).
-
-## Rebuild from scratch
-```bash
-rm -f sentinel-os.qcow2 seed.iso   # keep base-noble.img to skip re-downloading
-./build.sh
 ```
+sentinel-os/
+├── build.sh              # OS picker + base-image fetch + cloud-init seed builder
+├── launch.sh             # boot the VM under QEMU/KVM
+├── export-vbox.sh        # import the disk into VirtualBox (virtio-scsi, auto-resize)
+├── sentinel-os.conf      # remembered base-OS choice (the "setting")
+├── cloud-init/
+│   ├── user-data         # the provisioner: desktop, tools, AI, branding, hardening
+│   └── meta-data         # NoCloud instance metadata
+└── toolkit/              # everything installed into the OS
+    ├── sentinel-ai       # shared AI engine (local Ollama + cloud), used by the tools
+    ├── sentinel-scope    # engagement authorization guard (in-scope enforcement)
+    ├── sentinel-recon    # AI-orchestrated recon -> prioritized findings
+    ├── sentinel-loot     # AI findings register from raw scan output
+    ├── sentinel-triage / sentinel-engage   # AI triage + report
+    ├── sentinel-lockout  # emergency defensive lockdown
+    ├── sentinel-anon / sentinel-stealth / sentinel-macspoof   # anonymity
+    ├── sentinel-desktop-setup / gen-sentinel-menu             # first-login desktop
+    └── assets            # wallpaper, icons, Chrome/desktop assets
+```
+
+## Choosing the base OS
+
+```
+./build.sh              # interactive picker
+./build.sh ubuntu       # or name it
+SENTINEL_BASE=debian ./build.sh
+```
+
+Debian and Ubuntu are fully wired; Kali is experimental. Windows/Fedora/Arch aren't
+built by this pipeline (different provisioners) and the picker says so.
+
+## Installation
+
+```
+git clone https://github.com/SpartanKing18/sentinel-os
+cd sentinel-os
+./build.sh              # pick a base; builds the disk + cloud-init seed
+./launch.sh             # QEMU/KVM   (or ./export-vbox.sh for VirtualBox)
+```
+
+First boot self-provisions (~15–20 min). Login: `sentinel` / `sentinel`.
+
+## Status
+
+Active. Debian/Ubuntu bases fully supported; VirtualBox Guest Additions, Chrome,
+the AI toolkit, and the defensive tools are provisioned on first boot.
+
+## Security
+
+Sentinel OS ships offensive tooling for **authorized** testing only. Use
+`sentinel-scope` to declare in-scope targets — the AI tools refuse anything outside
+it. Do not distribute images with live credentials baked in.
+
+## License
+
+See `LICENSE`.
