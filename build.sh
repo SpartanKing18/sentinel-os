@@ -5,17 +5,33 @@
 #
 #   ./build.sh                 # interactive OS picker  (the "settings" for the base OS)
 #   ./build.sh ubuntu          # or name it directly
-#   SENTINEL_BASE=debian ./build.sh
+#   ./build.sh debian slim     # base + EDITION (netinstall | slim | full, default full)
+#   SENTINEL_BASE=debian SENTINEL_EDITION=netinstall ./build.sh
+#
+# Editions (how much Sentinel ships — all self-provision on first boot):
+#   netinstall  terminal only, no desktop/UI — core CLI stack + Nexus + local AI (smallest, ~12G disk)
+#   slim        full XFCE desktop + Nexus + tools, minus Metasploit/SecLists/Docker/cockpit app (~20G)
+#   full        everything: desktop, cockpit app, Metasploit, SecLists, Exploit-DB, Docker (~30G)
 #
 # Supported bases live in the registry below. Debian & Ubuntu are fully wired
 # (cloud-init + apt); adding another apt-family base is one registry line.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-DISK="sentinel-os.qcow2"
-SEED="seed.iso"
-DISK_SIZE="30G"
 CONF="sentinel-os.conf"     # remembers your last choice — the persisted "setting"
+
+# ── edition (how much ships) ─────────────────────────────────────────────────
+EDITION="${2:-${SENTINEL_EDITION:-}}"
+[ -z "$EDITION" ] && [ -f "$CONF" ] && EDITION="$(sed -n 's/^EDITION=//p' "$CONF" | head -1)"
+EDITION="$(echo "${EDITION:-full}" | tr 'A-Z' 'a-z')"
+case "$EDITION" in
+  netinstall) DISK_SIZE="12G" ;;
+  slim)       DISK_SIZE="20G" ;;
+  full|"")    EDITION="full"; DISK_SIZE="30G" ;;
+  *) echo "unknown edition '$EDITION' — use: netinstall | slim | full"; exit 2 ;;
+esac
+DISK="sentinel-os-${EDITION}.qcow2"
+SEED="seed-${EDITION}.iso"
 
 # ── OS registry ───────────────────────────────────────────────────────────────
 # key | pretty name | family | cloud-image directory | filename (or regex) | notes
@@ -60,8 +76,8 @@ fi
 
 FAMILY="${OS_FAMILY[$BASE]}"; DIR="${OS_DIR[$BASE]}"; FILE_RE="${OS_FILE[$BASE]}"
 BASE_IMG="base-${BASE}.qcow2"
-echo "BASE_OS=$BASE" > "$CONF"          # persist the setting
-echo "== Sentinel OS build  ·  base: ${OS_NAME[$BASE]}  ($FAMILY family) =="
+{ echo "BASE_OS=$BASE"; echo "EDITION=$EDITION"; } > "$CONF"   # persist the settings
+echo "== Sentinel OS build  ·  base: ${OS_NAME[$BASE]}  ($FAMILY family)  ·  edition: $EDITION =="
 
 need(){ command -v "$1" >/dev/null 2>&1; }
 for t in qemu-img xorriso curl openssl; do
@@ -95,14 +111,15 @@ rm -rf .seed && mkdir -p .seed
 cp cloud-init/meta-data .seed/meta-data
 sed -e "s#^    passwd: .*#    passwd: \"${HASH//#/\\#}\"#" \
     -e "s#@@SENTINEL_FAMILY@@#${FAMILY}#g" \
+    -e "s#@@SENTINEL_EDITION@@#${EDITION}#g" \
     cloud-init/user-data > .seed/user-data
 ( cd .seed && xorriso -as mkisofs -quiet -output "../$SEED" -volid CIDATA -joliet -rock user-data meta-data )
 rm -rf .seed
 
 echo
-echo "== done  ·  ${OS_NAME[$BASE]} =="
+echo "== done  ·  ${OS_NAME[$BASE]}  ·  $EDITION edition =="
 echo "  disk:  $(pwd)/$DISK"
 echo "  seed:  $(pwd)/$SEED"
-echo "  next:  ./launch.sh   (QEMU+KVM)   or   ./export-vbox.sh (VirtualBox)"
-echo "  login: sentinel / sentinel   (first boot installs the Sentinel desktop + tools)"
-echo "  change OS later:  ./build.sh <name>   (removes $DISK first to rebuild)"
+echo "  next:  ./launch.sh $EDITION   (QEMU+KVM)   or   ./export-vbox.sh $EDITION (VirtualBox)"
+echo "  login: sentinel / sentinel   ($([ "$EDITION" = netinstall ] && echo 'terminal only — boots to a console' || echo 'first boot installs the Sentinel desktop + tools'))"
+echo "  other editions:  ./build.sh $BASE {netinstall|slim|full}"

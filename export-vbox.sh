@@ -4,12 +4,16 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-DISK="sentinel-os.qcow2"
-SEED="seed.iso"
-VDI="sentinel-os.vdi"
-VM="Sentinel OS"
+# edition to export (matches build.sh output names); default full, remembers last build
+EDITION="${1:-${SENTINEL_EDITION:-}}"
+[ -z "$EDITION" ] && [ -f sentinel-os.conf ] && EDITION="$(sed -n 's/^EDITION=//p' sentinel-os.conf | head -1)"
+EDITION="$(echo "${EDITION:-full}" | tr 'A-Z' 'a-z')"
+DISK="sentinel-os-${EDITION}.qcow2"
+SEED="seed-${EDITION}.iso"
+VDI="sentinel-os-${EDITION}.vdi"
+VM="Sentinel OS ($EDITION)"
 
-[ -f "$DISK" ] || { echo "no $DISK — run ./build.sh first"; exit 1; }
+[ -f "$DISK" ] || { echo "no $DISK — run ./build.sh $EDITION first"; exit 1; }
 command -v VBoxManage >/dev/null || { echo "VirtualBox (VBoxManage) not found"; exit 1; }
 
 [ -f "$VDI" ] || { echo "converting qcow2 -> VDI ..."; qemu-img convert -O vdi "$DISK" "$VDI"; }

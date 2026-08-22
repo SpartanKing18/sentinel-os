@@ -101,6 +101,18 @@ write_files:
         case "${ID:-debian} ${ID_LIKE:-}" in *ubuntu*) FAMILY=ubuntu;; *) FAMILY=debian;; esac ;;
       esac
       echo "== Sentinel base family: $FAMILY (${PRETTY_NAME:-unknown}) =="
+      # Which EDITION are we building? build.sh stamps it. Controls how much ships:
+      #   netinstall — terminal only, no desktop/UI, core CLI + Nexus + local AI (smallest)
+      #   slim       — full desktop + Nexus + tools, minus the multi-GB frameworks/app
+      #   full       — everything: desktop, cockpit app, Metasploit, SecLists, Docker
+      EDITION="@@SENTINEL_EDITION@@"
+      case "$EDITION" in netinstall|slim|full) : ;; *) EDITION=full ;; esac
+      case "$EDITION" in
+        netinstall) WANT_GUI=0; WANT_APP=0; WANT_HEAVY=0 ;;
+        slim)       WANT_GUI=1; WANT_APP=0; WANT_HEAVY=0 ;;
+        *)          WANT_GUI=1; WANT_APP=1; WANT_HEAVY=1 ;;
+      esac
+      echo "== Sentinel edition: $EDITION  (gui=$WANT_GUI app=$WANT_APP heavy=$WANT_HEAVY) =="
       if [ "$FAMILY" = ubuntu ]; then
         # Ubuntu: make sure universe/multiverse are on (most tools live there)
         (command -v add-apt-repository >/dev/null && add-apt-repository -y universe multiverse) 2>/dev/null || \
@@ -123,34 +135,41 @@ write_files:
       echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
       # Our own desktop (XFCE) + tools from Debian — installed one-by-one so a
       # single unavailable package can't abort the batch.
-      PKGS="xfce4 xfce4-terminal xfce4-goodies xfce4-whiskermenu-plugin lightdm dbus-x11 \
-        git curl wget jq unzip build-essential python3 python3-pip pipx nodejs npm \
+      # CORE — CLI security stack + runtimes, shipped in EVERY edition (incl. netinstall).
+      PKGS_CORE="git curl wget jq unzip build-essential python3 python3-pip pipx nodejs npm \
         nmap masscan dnsutils whois net-tools tcpdump \
         nikto whatweb wafw00f dnsrecon dirb wfuzz gobuster \
-        sqlmap hydra john hashcat \
-        aircrack-ng wireshark ettercap-graphical \
+        sqlmap hydra john hashcat aircrack-ng \
         radare2 binwalk foremost sleuthkit \
         netcat-traditional python3-impacket \
         tor nftables firejail firejail-profiles apparmor apparmor-utils macchanger \
-        proxychains4 torsocks keepassxc gnupg whiptail desktop-file-utils \
+        proxychains4 torsocks gnupg whiptail kbd libglib2.0-bin"
+      # DESKTOP — XFCE + GUI tools, added for slim & full (not netinstall).
+      PKGS_DESKTOP="xfce4 xfce4-terminal xfce4-goodies xfce4-whiskermenu-plugin lightdm dbus-x11 \
+        wireshark ettercap-graphical keepassxc desktop-file-utils \
         xdotool wmctrl libimage-exiftool-perl arc-theme papirus-icon-theme \
-        fonts-inter fonts-jetbrains-mono dmz-cursor-theme xfce4-notifyd kbd libglib2.0-bin \
-        docker.io docker-compose-plugin"
+        fonts-inter fonts-jetbrains-mono dmz-cursor-theme xfce4-notifyd"
+      # HEAVY — multi-GB extras, full only.
+      PKGS_HEAVY="docker.io docker-compose-plugin"
+      PKGS="$PKGS_CORE"
+      [ "$WANT_GUI" = 1 ]   && PKGS="$PKGS $PKGS_DESKTOP"
+      [ "$WANT_HEAVY" = 1 ] && PKGS="$PKGS $PKGS_HEAVY"
       for p in $PKGS; do apt-get install -y "$p" || echo "SKIP $p"; done
-      usermod -aG docker sentinel 2>/dev/null || true
-      usermod -aG wireshark sentinel 2>/dev/null || true
-      systemctl enable --now docker 2>/dev/null || true
+      if [ "$WANT_HEAVY" = 1 ]; then usermod -aG docker sentinel 2>/dev/null || true; systemctl enable --now docker 2>/dev/null || true; fi
+      [ "$WANT_GUI" = 1 ] && usermod -aG wireshark sentinel 2>/dev/null || true
       # ---- upstream tools (not in Debian) ----
-      # Metasploit (official installer adds its apt repo)
       install -d -m0755 /usr/share/keyrings
-      curl -fsSL --max-time 60 https://apt.metasploit.com/metasploit-framework.gpg.key | gpg --dearmor -o /usr/share/keyrings/metasploit.gpg 2>/dev/null || true
-      echo "deb [signed-by=/usr/share/keyrings/metasploit.gpg] https://apt.metasploit.com/ lucid main" > /etc/apt/sources.list.d/metasploit.list
-      apt-get update -y || true
-      timeout 900 apt-get install -y metasploit-framework || echo "MSF-SKIP"
-      # SecLists + Exploit-DB (searchsploit)
-      [ -d /usr/share/seclists ] || timeout 400 git clone --depth 1 https://github.com/danielmiessler/SecLists /usr/share/seclists || echo SECLISTS-SKIP
-      [ -d /opt/exploitdb ] || timeout 300 git clone --depth 1 https://gitlab.com/exploit-database/exploitdb /opt/exploitdb || echo EDB-SKIP
-      ln -sf /opt/exploitdb/searchsploit /usr/local/bin/searchsploit 2>/dev/null || true
+      if [ "$WANT_HEAVY" = 1 ]; then
+        # Metasploit (official installer adds its apt repo) — full only (multi-GB)
+        curl -fsSL --max-time 60 https://apt.metasploit.com/metasploit-framework.gpg.key | gpg --dearmor -o /usr/share/keyrings/metasploit.gpg 2>/dev/null || true
+        echo "deb [signed-by=/usr/share/keyrings/metasploit.gpg] https://apt.metasploit.com/ lucid main" > /etc/apt/sources.list.d/metasploit.list
+        apt-get update -y || true
+        timeout 900 apt-get install -y metasploit-framework || echo "MSF-SKIP"
+        # SecLists + Exploit-DB (searchsploit) — large wordlist/exploit corpora
+        [ -d /usr/share/seclists ] || timeout 400 git clone --depth 1 https://github.com/danielmiessler/SecLists /usr/share/seclists || echo SECLISTS-SKIP
+        [ -d /opt/exploitdb ] || timeout 300 git clone --depth 1 https://gitlab.com/exploit-database/exploitdb /opt/exploitdb || echo EDB-SKIP
+        ln -sf /opt/exploitdb/searchsploit /usr/local/bin/searchsploit 2>/dev/null || true
+      fi
       # ProjectDiscovery + ffuf via PREBUILT release binaries (no compile, no Go-version issues)
       mkdir -p /tmp/pd
       for repo in projectdiscovery/nuclei projectdiscovery/subfinder projectdiscovery/httpx ffuf/ffuf; do
@@ -165,9 +184,12 @@ write_files:
       # Local AI for autonomous hacking
       timeout 300 bash -c "curl -fsSL https://ollama.com/install.sh | sh" || echo OLLAMA-SKIP
       systemctl enable --now ollama 2>/dev/null || true
-      # Sentinel app (latest .deb) + Nexus CLI
-      DEB_URL=$(curl -fsSL https://api.github.com/repos/SpartanKing18/sentinel-web/releases/tags/sentinel | jq -r '.assets[].browser_download_url' | grep -E 'sentinel-app_.*_amd64\.deb' | sort -V | tail -1)
-      if [ -n "$DEB_URL" ]; then curl -fL --max-time 180 "$DEB_URL" -o /tmp/sentinel-app.deb; apt-get install -y /tmp/sentinel-app.deb || { dpkg -i /tmp/sentinel-app.deb || true; apt-get -f install -y; }; fi
+      # Sentinel cockpit app (latest .deb) — full only (the GUI cockpit; slim/netinstall
+      # use Nexus in the terminal instead). Nexus CLI itself installs in every edition.
+      if [ "$WANT_APP" = 1 ]; then
+        DEB_URL=$(curl -fsSL https://api.github.com/repos/SpartanKing18/sentinel-web/releases/tags/sentinel | jq -r '.assets[].browser_download_url' | grep -E 'sentinel-app_.*_amd64\.deb' | sort -V | tail -1)
+        if [ -n "$DEB_URL" ]; then curl -fL --max-time 180 "$DEB_URL" -o /tmp/sentinel-app.deb; apt-get install -y /tmp/sentinel-app.deb || { dpkg -i /tmp/sentinel-app.deb || true; apt-get -f install -y; }; fi
+      fi
       [ -d /opt/sentinel-cli ] || timeout 180 git clone --depth 1 https://github.com/SpartanKing18/sentinel-cli /opt/sentinel-cli
       ( cd /opt/sentinel-cli && { timeout 300 npm install --omit=dev --no-audit --no-fund || timeout 300 npm install --no-audit --no-fund || true; }; npm link || ln -sf /opt/sentinel-cli/sentinel.js /usr/local/bin/sentinel )
       chmod +x /opt/sentinel-cli/sentinel.js || true
@@ -202,6 +224,8 @@ write_files:
       sed -i 's/^      //' /usr/share/applications/sentinel-lockout.desktop
       command -v firecfg >/dev/null && firecfg >/dev/null 2>&1 || true   # auto-sandbox common apps
       echo sentinel >> /etc/firejail/firejail.users 2>/dev/null || true
+      if [ "$WANT_GUI" = 1 ]; then
+      # ===== desktop-only (slim & full): app menu, wallpapers, browser, login theme, guest additions =====
       gen-sentinel-menu 2>/dev/null || true
       install -d /usr/share/backgrounds; curl -fsSL "https://raw.githubusercontent.com/SpartanKing18/sentinel-os/main/toolkit/sentinel-wallpaper.png" -o /usr/share/backgrounds/sentinel-wallpaper.png 2>/dev/null || true
       # Sentinel wallpaper set (50 unique + classic) + the switcher/cycler tool.
@@ -251,12 +275,15 @@ write_files:
         mkdir -p /mnt/ga && mount -o loop,ro "$GAISO" /mnt/ga 2>/dev/null && \
           { sh /mnt/ga/VBoxLinuxAdditions.run --nox11 2>/dev/null || true; umount /mnt/ga 2>/dev/null; }
       fi
+      fi   # ===== end desktop-only (WANT_GUI) =====
       # Make the image bootable on ANY hypervisor disk controller (VirtualBox
       # SATA/AHCI, VMware) — the Debian cloud initramfs is virtio-only by default.
       sed -i 's/^MODULES=.*/MODULES=most/' /etc/initramfs-tools/initramfs.conf 2>/dev/null || echo "MODULES=most" >> /etc/initramfs-tools/initramfs.conf
       update-initramfs -u 2>/dev/null || true
-      # Desktop cockpit shortcuts
+      if [ "$WANT_GUI" = 1 ]; then
+      # Desktop cockpit shortcuts (slim & full)
       install -d -o sentinel -g sentinel /home/sentinel/Desktop
+      if [ "$WANT_APP" = 1 ]; then
       cat > /home/sentinel/Desktop/Sentinel.desktop <<'D'
       [Desktop Entry]
       Type=Application
@@ -264,6 +291,7 @@ write_files:
       Exec=sentinel-app
       Terminal=false
       D
+      fi
       cat > /home/sentinel/Desktop/Autopilot.desktop <<'D'
       [Desktop Entry]
       Type=Application
@@ -282,6 +310,7 @@ write_files:
       D
       chown sentinel:sentinel /home/sentinel/Desktop/*.desktop 2>/dev/null || true
       chmod +x /home/sentinel/Desktop/*.desktop 2>/dev/null || true
+      fi   # end desktop cockpit shortcuts (WANT_GUI)
       # Branded shell: a Sentinel banner on new terminals + a teal Sentinel prompt
       if ! grep -q "sentinel-greeting" /home/sentinel/.bashrc 2>/dev/null; then
         cat >> /home/sentinel/.bashrc <<'BRC'
@@ -298,14 +327,26 @@ write_files:
       printf 'network:\n  version: 2\n  ethernets:\n    sentinel-any:\n      match:\n        name: "e*"\n      dhcp4: true\n      dhcp6: false\n' > /etc/netplan/50-cloud-init.yaml
       chmod 600 /etc/netplan/50-cloud-init.yaml
       echo 'network: {config: disabled}' > /etc/cloud/cloud.cfg.d/99-disable-network.cfg
+      # Boot target per edition: GUI editions bring up the LightDM desktop; netinstall
+      # is terminal-only — boot to the console and autologin the operator on tty1.
+      if [ "$WANT_GUI" = 1 ]; then
+        systemctl enable lightdm 2>/dev/null || true
+        systemctl set-default graphical.target 2>/dev/null || true
+        systemctl start lightdm 2>/dev/null || true
+      else
+        systemctl disable lightdm 2>/dev/null || true
+        systemctl set-default multi-user.target 2>/dev/null || true
+        mkdir -p /etc/systemd/system/getty@tty1.service.d
+        printf '[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin sentinel --noclear %%I $TERM\n' > /etc/systemd/system/getty@tty1.service.d/autologin.conf
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl restart getty@tty1 2>/dev/null || true
+      fi
       touch /var/lib/sentinel-provisioned
       echo "=== provision done $(date) ==="
 
 runcmd:
   - [ bash, -c, "echo 'datasource_list: [ NoCloud, ConfigDrive, None ]' > /etc/cloud/cloud.cfg.d/99-nocloud.cfg" ]
+  # provision.sh sets the boot target itself (graphical for slim/full, console for netinstall)
   - [ bash, /usr/local/sbin/sentinel-provision.sh ]
-  - [ systemctl, enable, lightdm ]
-  - [ systemctl, set-default, graphical.target ]
-  - [ systemctl, start, lightdm ]
 
 final_message: "Sentinel OS ready after $UPTIME s. Login: sentinel / sentinel."

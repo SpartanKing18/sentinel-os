@@ -5,12 +5,16 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-DISK="sentinel-os.qcow2"
-SEED="seed.iso"
+# edition to launch (matches build.sh output names); default full, remembers last build
+EDITION="${1:-${SENTINEL_EDITION:-}}"
+[ -z "$EDITION" ] && [ -f sentinel-os.conf ] && EDITION="$(sed -n 's/^EDITION=//p' sentinel-os.conf | head -1)"
+EDITION="$(echo "${EDITION:-full}" | tr 'A-Z' 'a-z')"
+DISK="sentinel-os-${EDITION}.qcow2"
+SEED="seed-${EDITION}.iso"
 RAM="${SENTINEL_RAM:-4096}"
 CPUS="${SENTINEL_CPUS:-2}"
 
-[ -f "$DISK" ] || { echo "no $DISK — run ./build.sh first"; exit 1; }
+[ -f "$DISK" ] || { echo "no $DISK — run ./build.sh $EDITION first"; exit 1; }
 
 ACCEL=(); [ -w /dev/kvm ] && ACCEL=(-enable-kvm -cpu host) || echo "note: /dev/kvm not writable — running without KVM (slower). Add yourself to the 'kvm' group to speed it up."
 

@@ -67,16 +67,35 @@ SENTINEL_BASE=debian ./build.sh
 Debian and Ubuntu are fully wired; Kali is experimental. Windows/Fedora/Arch aren't
 built by this pipeline (different provisioners) and the picker says so.
 
+## Editions
+
+Pick how much ships — every edition self-provisions on first boot:
+
+| Edition | Disk | UI | What's included |
+|---|---|---|---|
+| **netinstall** | ~12 GB | none (terminal only) | Core CLI security stack + Nexus AI agent + local models. Boots to a console with tty1 autologin. Smallest & fastest. |
+| **slim** | ~20 GB | XFCE desktop | Full branded desktop + Nexus + the CLI toolset, **minus** Metasploit, SecLists, Exploit-DB, Docker and the cockpit app. |
+| **full** | ~30 GB | XFCE desktop | Everything: desktop, cockpit app, Metasploit, SecLists, Exploit-DB, Docker, autonomous AI recon, honeypot — 80+ tools. |
+
+```
+./build.sh debian netinstall     # base + edition (default edition is full)
+./build.sh debian slim
+./build.sh debian full
+SENTINEL_BASE=debian SENTINEL_EDITION=slim ./build.sh
+```
+
+Editions build to separate files (`sentinel-os-<edition>.qcow2` / `seed-<edition>.iso`) so they don't clobber each other. Pass the edition to the launchers too: `./launch.sh slim`, `./export-vbox.sh netinstall`.
+
 ## Installation
 
 ```
 git clone https://github.com/SpartanKing18/sentinel-os
 cd sentinel-os
-./build.sh              # pick a base; builds the disk + cloud-init seed
-./launch.sh             # QEMU/KVM   (or ./export-vbox.sh for VirtualBox)
+./build.sh debian full        # pick a base + edition; builds the disk + cloud-init seed
+./launch.sh full              # QEMU/KVM   (or ./export-vbox.sh full for VirtualBox)
 ```
 
-First boot self-provisions (~15–20 min). Login: `sentinel` / `sentinel`.
+First boot self-provisions (netinstall ~5–8 min, full ~15–20 min). Login: `sentinel` / `sentinel`.
 
 ## Status
 
